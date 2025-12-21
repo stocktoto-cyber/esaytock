@@ -95,9 +95,12 @@ if data is not None and not data.empty:
     st.subheader(f"📊 股票代碼: {ticker} | 區間: {start_date.date()} ~ {end_date.date()}")
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("區間漲跌幅", f"{((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100):.2f}%")
-    col2.metric("符合爆量條件天數", f"{len(signals)} 天")
-    col3.metric("當前布林通道寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
+    # 避免除以零或資料不足的錯誤
+    if len(data) > 0:
+        roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
+        col1.metric("區間漲跌幅", f"{roi:.2f}%")
+        col2.metric("符合爆量條件天數", f"{len(signals)} 天")
+        col3.metric("當前布林通道寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
 
     # --- 繪圖 (使用 Plotly) ---
     fig = go.Figure()
@@ -127,20 +130,31 @@ if data is not None and not data.empty:
     fig.update_layout(title="股價走勢與布林通道 (橘色三角為爆量訊號)", xaxis_rangeslider_visible=False, height=600)
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- 顯示詳細數據 ---
+    # --- 顯示詳細數據 (已中文化) ---
     st.subheader("🔎 爆量日詳細數據與布林寬度")
     if not signals.empty:
-        # 整理要顯示的欄位
+        # 1. 整理要顯示的欄位
         display_df = signals[['Close', 'Volume', 'Vol_MA20', 'BB_Width']].copy()
+        
+        # 2. 計算倍數
         display_df['Volume_Ratio'] = display_df['Volume'] / display_df['Vol_MA20']
-        display_df = display_df.style.format({
-            'Close': '{:.2f}',
-            'Volume': '{:,.0f}',
-            'Vol_MA20': '{:,.0f}',
-            'BB_Width': '{:.2f}',
-            'Volume_Ratio': '{:.2f}倍'
+
+        # 3. 將英文欄位重新命名為中文
+        display_df.columns = ['收盤價', '成交量', '月均量 (MA20)', '布林通道寬度', '量增倍數']
+        
+        # 4. 將日期索引名稱改為中文
+        display_df.index.name = '日期'
+
+        # 5. 設定顯示格式 (注意這裡的 Key 也要改成對應的中文名稱)
+        formatted_df = display_df.style.format({
+            '收盤價': '{:.2f}',
+            '成交量': '{:,.0f}',
+            '月均量 (MA20)': '{:,.0f}',
+            '布林通道寬度': '{:.2f}',
+            '量增倍數': '{:.2f}倍'
         })
-        st.dataframe(display_df)
+        
+        st.dataframe(formatted_df)
     else:
         st.info("選定區間內無符合成交量條件的交易日。")
 
