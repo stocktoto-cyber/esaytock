@@ -75,6 +75,10 @@ def load_data(ticker, start, end):
 data = load_data(ticker, start_date, end_date)
 
 if data is not None and not data.empty:
+    
+    # 【關鍵修改】將成交量從「股」換算成「張」 (除以 1000)
+    data['Volume'] = data['Volume'] / 1000
+
     # 1. 計算技術指標
     # 布林通道 (Bollinger Bands)
     indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
@@ -83,19 +87,17 @@ if data is not None and not data.empty:
     data["BB_Mid"] = indicator_bb.bollinger_mavg()
     data["BB_Width"] = data["BB_High"] - data["BB_Low"] # 通道距離
     
-    # 成交量平均 (使用 20 日，約一個月交易日)
+    # 成交量平均 (使用 20 日，這裡算出來的也會是「張」)
     data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
     # 2. 篩選策略訊號 (Backtesting Logic)
     # 條件：當日成交量 > 設定倍數 * 月均量
-    # 這裡我們只標記出符合條件的日子
     signals = data[data["Volume"] > (data["Vol_MA20"] * vol_multiplier)]
     
     # 顯示統計資訊
     st.subheader(f"📊 股票代碼: {ticker} | 區間: {start_date.date()} ~ {end_date.date()}")
     
     col1, col2, col3 = st.columns(3)
-    # 避免除以零或資料不足的錯誤
     if len(data) > 0:
         roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
         col1.metric("區間漲跌幅", f"{roi:.2f}%")
@@ -130,7 +132,7 @@ if data is not None and not data.empty:
     fig.update_layout(title="股價走勢與布林通道 (橘色三角為爆量訊號)", xaxis_rangeslider_visible=False, height=600)
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- 顯示詳細數據 (已中文化) ---
+    # --- 顯示詳細數據 (已中文化並修正單位) ---
     st.subheader("🔎 爆量日詳細數據與布林寬度")
     if not signals.empty:
         # 1. 整理要顯示的欄位
@@ -139,17 +141,17 @@ if data is not None and not data.empty:
         # 2. 計算倍數
         display_df['Volume_Ratio'] = display_df['Volume'] / display_df['Vol_MA20']
 
-        # 3. 將英文欄位重新命名為中文
-        display_df.columns = ['收盤價', '成交量', '月均量 (MA20)', '布林通道寬度', '量增倍數']
+        # 3. 將英文欄位重新命名為中文 (標註「張」)
+        display_df.columns = ['收盤價', '成交量 (張)', '月均量 (MA20/張)', '布林通道寬度', '量增倍數']
         
         # 4. 將日期索引名稱改為中文
         display_df.index.name = '日期'
 
-        # 5. 設定顯示格式 (注意這裡的 Key 也要改成對應的中文名稱)
+        # 5. 設定顯示格式
         formatted_df = display_df.style.format({
             '收盤價': '{:.2f}',
-            '成交量': '{:,.0f}',
-            '月均量 (MA20)': '{:,.0f}',
+            '成交量 (張)': '{:,.0f}',       # 整數顯示，加千分位
+            '月均量 (MA20/張)': '{:,.0f}', # 整數顯示，加千分位
             '布林通道寬度': '{:.2f}',
             '量增倍數': '{:.2f}倍'
         })
