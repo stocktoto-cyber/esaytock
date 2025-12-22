@@ -7,32 +7,42 @@ import ta
 
 # --- 1. 頁面設定 (改為 Centered 適合手機直向瀏覽) ---
 st.set_page_config(
-    page_title="台股量價回測(手機版)", 
+    page_title="台股量價回測(手機觸控版)", 
+    page_icon="📈",
     layout="centered", 
     initial_sidebar_state="collapsed"
 )
 
-st.title("📈 台股量價回測 (Mobile)")
+# 自訂 CSS 以優化手機版間距與字體
+st.markdown("""
+    <style>
+    .stMetricLabel {font-size: 14px !important;}
+    .stMetricValue {font-size: 20px !important;}
+    /* 調整 Plotly 圖表容器在手機上的邊距 */
+    .stPlotlyChart {
+        margin-left: -10px; margin-right: -10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("📈 台股量價回測 (觸控優化)")
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
     st.session_state.run_analysis = False
 
-# --- 2. 輸入區塊優化 (將核心輸入移出側邊欄) ---
-# 手機版操作邏輯：最上方輸入代碼 -> 點開設定(選填) -> 執行
-
-col_input, col_btn = st.columns([2, 1])
+# --- 2. 輸入區塊優化 ---
+col_input, col_btn = st.columns([2.5, 1])
 with col_input:
-    stock_input = st.text_input("股票代碼", value="00663L", label_visibility="collapsed", placeholder="輸入代碼")
+    stock_input = st.text_input("股票代碼", value="00663L", label_visibility="collapsed", placeholder="輸入台股代碼 (如 2330)")
 
-# 處理代碼後綴
 if stock_input and not stock_input.endswith('.TW') and not stock_input.endswith('.TWO'):
     ticker = f"{stock_input}.TW"
 else:
     ticker = stock_input
 
-# --- 3. 摺疊式設定選單 (節省手機螢幕空間) ---
-with st.expander("⚙️ 設定回測日期與策略參數", expanded=False):
+# --- 3. 摺疊式設定選單 ---
+with st.expander("⚙️ 點此設定日期與策略參數", expanded=False):
     
     st.caption("📅 日期設定")
     period_option = st.selectbox(
@@ -40,7 +50,6 @@ with st.expander("⚙️ 設定回測日期與策略參數", expanded=False):
         ["近一年", "近三年", "近五年", "AI爆發期 (2023-至今)", "疫情期間 (2020-2022)", "自訂日期"]
     )
 
-    # 日期邏輯處理
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1) 
     start_date = today - timedelta(days=365)
@@ -81,41 +90,46 @@ with st.expander("⚙️ 設定回測日期與策略參數", expanded=False):
     bb_window = 20
     bb_std = 2
 
-    # 強制更新按鈕放在設定裡
-    if st.button("🔄 清除快取並強制更新"):
+    if st.button("🔄 清除快取並強制更新", use_container_width=True):
         st.cache_data.clear()
         st.session_state.run_analysis = True
 
-# 執行按鈕 (放在最上方輸入框旁，或設定下方)
+# 執行按鈕
 with col_btn:
-    # 使用 callback 確保點擊後狀態更新
     def start_click():
         st.session_state.run_analysis = True
     st.button("🚀 分析", on_click=start_click, type="primary", use_container_width=True)
 
 
 # --- 數據處理函數 ---
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def load_data(ticker, start, end):
     try:
         df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True, progress=False)
         if df.empty: return None
+        # 處理 MultiIndex (yfinance 新版可能的行為)
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
+             # 如果第二層 level 有 'Close', 'Open' 等字樣，就 drop 掉第一層的 ticker 名稱
+            if 'Close' in df.columns.get_level_values(1):
+                 df.columns = df.columns.droplevel(0)
+            # 否則如果第一層有這些字樣，就 drop 掉第二層 (視 yfinance 版本而定，較少見)
+            elif 'Close' in df.columns.get_level_values(0):
+                 df.columns = df.columns.droplevel(1)
+            
         return df
-    except Exception:
+    except Exception as e:
+        st.error(f"資料下載失敗: {e}")
         return None
 
 # --- 主程式邏輯 ---
 if st.session_state.run_analysis:
     
-    # 顯示載入動畫 (改用 toast 或簡單文字，比較不佔版面)
-    with st.status(f"正在下載 {ticker} 資料...", expanded=True) as status:
+    with st.spinner(f"正在分析 {ticker}..."):
         data = load_data(ticker, start_date, end_date)
         
-        if data is not None and not data.empty:
-            status.update(label="數據計算中...", state="running")
-            
+        if data is not None and not data.empty and 'Close' in data.columns:
+            # 資料處理
+            data = data.copy() # 避免 SettingWithCopyWarning
             data['Volume'] = data['Volume'] / 1000 # 換算成張數
 
             # 指標計算
@@ -126,24 +140,20 @@ if st.session_state.run_analysis:
             data["BB_Width"] = data["BB_High"] - data["BB_Low"]
             data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
-            status.update(label="分析完成！", state="complete", expanded=False)
         else:
-            status.update(label="找不到資料", state="error")
-            st.error("無法取得資料，請檢查代碼或日期。")
+            st.error(f"無法取得 {ticker} 資料，請檢查代碼是否正確。")
             st.stop()
 
-    # --- 4. 最新行情顯示 (改為 2x2 排版) ---
+    # --- 4. 最新行情顯示 (2x2 排版) ---
     latest = data.iloc[-1]
     prev = data.iloc[-2] if len(data) > 1 else latest
     
     diff = latest['Close'] - prev['Close']
     diff_pct = (diff / prev['Close']) * 100
-    color_text = "red" if diff > 0 else "green" # 台股紅漲綠跌
     
-    st.subheader(f"🎫 {ticker} 行情")
-    st.caption(f"日期: {latest.name.strftime('%Y-%m-%d')}")
+    st.subheader(f"🎫 {ticker} 行情", anchor=False)
+    st.caption(f"最新資料日期: {latest.name.strftime('%Y-%m-%d')}")
 
-    # 手機版 2欄佈局
     m_col1, m_col2 = st.columns(2)
     with m_col1:
         st.metric("收盤價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
@@ -167,7 +177,7 @@ if st.session_state.run_analysis:
         condition_strategy = condition_vol & (data["Close"] <= trigger_price)
         signal_color, marker_symbol = "green", "triangle-up"
         signal_y_position = data['Low'] * 0.99 
-        signal_name = "弱勢/反彈訊號"
+        signal_name = "弱勢訊號"
     else:
         condition_strategy = condition_vol
         signal_color, marker_symbol = "orange", "triangle-down"
@@ -176,16 +186,16 @@ if st.session_state.run_analysis:
 
     signals = data[condition_strategy]
 
-    # --- 5. 回測統計 (改為 3欄緊湊版) ---
-    st.markdown("### 📊 回測績效")
+    # --- 5. 回測統計 (3欄緊湊版) ---
+    st.markdown("### 📊 回測績效", anchor=False)
     roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
     
     s1, s2, s3 = st.columns(3)
     s1.metric("區間漲跌", f"{roi:.1f}%")
     s2.metric("觸發次數", f"{len(signals)}")
-    s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.1f}")
+    s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.2f}")
 
-    # --- 6. 圖表優化 (針對手機觸控) ---
+    # --- 6. 圖表優化 (針對手機觸控深度優化) ---
     fig = go.Figure()
 
     # K線
@@ -196,10 +206,10 @@ if st.session_state.run_analysis:
         name='K線', visible=True
     ))
 
-    # 布林帶 (設為 Legend group 以便一次開關，或保持簡單)
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1), name='BB Upper'))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1), name='BB Lower', fill='tonexty'))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='blue', width=1.5), name='MA20'))
+    # 布林帶
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Upper', legendgroup="BB"))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Lower', fill='tonexty', fillcolor='rgba(128,128,128,0.1)', legendgroup="BB"))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='blue', width=1.5), name='MA20', legendgroup="BB"))
 
     # 訊號
     if not signals.empty:
@@ -207,37 +217,69 @@ if st.session_state.run_analysis:
         fig.add_trace(go.Scatter(
             x=signals.index, y=plot_y,
             mode='markers',
-            marker=dict(symbol=marker_symbol, size=10, color=signal_color),
+            marker=dict(symbol=marker_symbol, size=12, color=signal_color, line=dict(width=1, color='white')),
             name=signal_name
         ))
 
-    # 手機版圖表 Layout 設定
+    # 手機版圖表 Layout 設定 (關鍵修改)
     fig.update_layout(
-        title="股價走勢圖",
-        xaxis_rangeslider_visible=False,
-        height=500, # 稍微增高以便手機滑動觀察
-        margin=dict(l=10, r=10, t=30, b=10), # 減少邊界
+        title="股價走勢圖 (單指平移/雙指縮放)",
+        title_font_size=16,
+        height=550, # 稍微再高一點，容納下方滑桿
+        margin=dict(l=10, r=10, t=60, b=20), # 增加頂部邊距給按鈕和圖例
         legend=dict(
-            orientation="h", # 水平排列圖例
-            yanchor="bottom", y=1.02, # 放在標題下方/圖表上方
-            xanchor="right", x=1
+            orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
+            bgcolor="rgba(255,255,255,0.6)", # 半透明背景
+            font=dict(size=11)
         ),
-        dragmode='pan' # 手機上預設為拖曳移動，而非縮放框選
+        # 【重點1】啟用下方滑動條 (Range Slider) - 手機救星
+        xaxis=dict(
+            rangeslider=dict(
+                visible=True,
+                thickness=0.12 # 設定滑桿高度比例
+            ),
+            type="date",
+            # 【重點2】新增快速時間按鈕 (Range Selector)
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1月", step="month", stepmode="backward"),
+                    dict(count=3, label="3月", step="month", stepmode="backward"),
+                    dict(count=6, label="半年", step="month", stepmode="backward"),
+                    dict(step="all", label="全部")
+                ]),
+                x=0, y=1.01, xanchor='left', yanchor='bottom', # 按鈕位置設定在左上角
+                font=dict(size=11),
+                bgcolor="rgba(240,240,240,0.8)"
+            )
+        ),
+        # 【重點3】Y軸設定：確保拖曳時自動縮放 (Auto-scale)
+        yaxis=dict(
+            autorange=True, # 確保Y軸隨X軸範圍自動調整
+            fixedrange=False, # 允許Y軸被縮放(雖然我們主要操作X軸)
+            side="right" # 將 Y軸刻度移到右側，比較符合手機閱讀習慣
+        ),
+        dragmode='pan', # 預設單指操作為平移
+        hovermode='x unified', # 統一顯示資訊框，手指點擊時比較清楚
+        hoverlabel=dict(
+            bgcolor="rgba(255,255,255,0.9)",
+            font_size=12
+        )
     )
-    
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}) # 關閉浮動工具列
 
-    # --- 7. 詳細數據 (放入 Expander 避免佔位) ---
+    # 【重點4】Config 設定：優化觸控行為
+    # scrollZoom=True 在手機上對應更順暢的雙指縮放
+    # displayModeBar=False 隱藏礙事的小工具列
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': True})
+
+    # --- 7. 詳細數據 ---
     with st.expander("🔎 查看詳細訊號表格"):
         if not signals.empty:
             display_df = signals[['Close', 'Volume', 'BB_High', 'BB_Low']].copy()
             display_df.columns = ['收盤', '量(張)', 'BB上', 'BB下']
-            display_df.index = display_df.index.strftime('%Y-%m-%d') # 簡化日期格式
-            
-            # 標示漲跌顏色
-            st.dataframe(display_df.style.format("{:.2f}"))
+            display_df.index = display_df.index.strftime('%Y-%m-%d')
+            st.dataframe(display_df.style.format("{:,.0f}", subset=['量(張)']).format("{:.2f}", subset=['收盤', 'BB上', 'BB下']))
         else:
-            st.info("無觸發訊號")
+            st.info("此區間內無觸發訊號")
 
 else:
-    st.info("👆 請輸入代碼並點擊「分析」")
+    st.info("👆 請在上方輸入代碼並點擊「🚀 分析」")
