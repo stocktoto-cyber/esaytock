@@ -61,6 +61,16 @@ bb_strategy = st.sidebar.radio(
     ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
 )
 
+# 【新增功能】寬容度微調
+bb_tolerance = st.sidebar.slider(
+    "訊號觸發寬容度 (%)", 
+    min_value=0.0, 
+    max_value=3.0, 
+    value=0.0, 
+    step=0.1, 
+    help="數值越大越寬鬆。例如設定 1%，代表股價只要接近上緣 1% 範圍內就會視為觸發，能增加出手訊號。"
+)
+
 bb_window = 20
 bb_std = 2
 
@@ -111,17 +121,31 @@ if st.session_state.run_analysis:
             marker_symbol = "triangle-down"
             signal_y_position = data['High'] * 1.005 # 預設位置
             
+            # 【關鍵修改】加入寬容度 (Tolerance) 邏輯
+            # 如果寬容度是 1%，tolerance_factor = 0.01
+            tolerance_factor = bb_tolerance / 100.0
+
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
-                condition_strategy = condition_vol & (data["Close"] >= data["BB_High"])
+                # 原本是 >= BB_High
+                # 現在只要 >= BB_High * (1 - tolerance)
+                # 例如：上緣是 100元，寬容度 1%，只要 >= 99元 就觸發
+                trigger_price = data["BB_High"] * (1 - tolerance_factor)
+                condition_strategy = condition_vol & (data["Close"] >= trigger_price)
+                
                 signal_color = "red"
-                signal_name = "爆量突破上緣"
+                signal_name = f"爆量近上緣 (寬容度{bb_tolerance}%)"
                 marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005 
 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
-                condition_strategy = condition_vol & (data["Close"] <= data["BB_Low"])
+                # 原本是 <= BB_Low
+                # 現在只要 <= BB_Low * (1 + tolerance)
+                # 例如：下緣是 100元，寬容度 1%，只要 <= 101元 就觸發
+                trigger_price = data["BB_Low"] * (1 + tolerance_factor)
+                condition_strategy = condition_vol & (data["Close"] <= trigger_price)
+                
                 signal_color = "green"
-                signal_name = "爆量跌破下緣"
+                signal_name = f"爆量近下緣 (寬容度{bb_tolerance}%)"
                 marker_symbol = "triangle-up"
                 signal_y_position = data['Low'] * 0.995 
 
@@ -155,7 +179,7 @@ if st.session_state.run_analysis:
                 name='K線'
             ))
 
-            # 【新增】月線 (20MA) - 使用藍色實線
+            # 月線 (20MA)
             fig.add_trace(go.Scatter(
                 x=data.index, 
                 y=data['BB_Mid'], 
