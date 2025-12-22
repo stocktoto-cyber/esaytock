@@ -61,12 +61,11 @@ bb_strategy = st.sidebar.radio(
     ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
 )
 
-# 【修改處】寬容度擴大至 10%
 bb_tolerance = st.sidebar.slider(
     "訊號觸發寬容度 (%)", 
     min_value=0.0, 
-    max_value=10.0, # 上限改為 10.0
-    value=1.0,      # 預設改為 1.0
+    max_value=10.0, 
+    value=1.0, 
     step=0.1, 
     help="數值越大越寬鬆。例如設定 5%，代表股價只要接近上緣 5% 範圍內就會視為觸發。"
 )
@@ -105,7 +104,6 @@ if st.session_state.run_analysis:
             data['Volume'] = data['Volume'] / 1000
 
             # 1. 計算技術指標
-            # BB_Mid 其實就是 20MA (月線)
             indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
             data["BB_High"] = indicator_bb.bollinger_hband()
             data["BB_Low"] = indicator_bb.bollinger_lband()
@@ -113,32 +111,48 @@ if st.session_state.run_analysis:
             data["BB_Width"] = data["BB_High"] - data["BB_Low"]
             data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
+            # --- 【新增功能】顯示最新行情資訊 ---
+            st.subheader(f"🎫 {ticker} 最新即時行情")
+            
+            # 取得最後一筆資料
+            latest = data.iloc[-1]
+            # 取得前一筆資料 (算漲跌幅用)
+            prev = data.iloc[-2] if len(data) > 1 else latest
+            
+            diff = latest['Close'] - prev['Close']
+            diff_pct = (diff / prev['Close']) * 100
+            
+            # 建立四個欄位顯示資訊
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("目前股價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
+            m2.metric("最新成交量 (張)", f"{latest['Volume']:,.0f}")
+            m3.metric("布林上緣", f"{latest['BB_High']:.2f}")
+            m4.metric("布林下緣", f"{latest['BB_Low']:.2f}")
+            
+            st.markdown("---") # 分隔線
+            # ----------------------------------
+
             # 2. 篩選策略訊號
             condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
             
             signal_color = "orange"
             signal_name = "爆量訊號"
             marker_symbol = "triangle-down"
-            signal_y_position = data['High'] * 1.005 # 預設位置
+            signal_y_position = data['High'] * 1.005 
             
-            # 計算寬容度因子
             tolerance_factor = bb_tolerance / 100.0
 
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
-                # 觸發價 = 上緣 * (1 - 寬容度)
                 trigger_price = data["BB_High"] * (1 - tolerance_factor)
                 condition_strategy = condition_vol & (data["Close"] >= trigger_price)
-                
                 signal_color = "red"
                 signal_name = f"爆量近上緣 (寬容度{bb_tolerance}%)"
                 marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005 
 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
-                # 觸發價 = 下緣 * (1 + 寬容度)
                 trigger_price = data["BB_Low"] * (1 + tolerance_factor)
                 condition_strategy = condition_vol & (data["Close"] <= trigger_price)
-                
                 signal_color = "green"
                 signal_name = f"爆量近下緣 (寬容度{bb_tolerance}%)"
                 marker_symbol = "triangle-up"
@@ -153,8 +167,8 @@ if st.session_state.run_analysis:
 
             signals = data[condition_strategy]
             
-            # --- 顯示結果 ---
-            st.subheader(f"📊 {ticker} 分析結果 | 策略: {bb_strategy}")
+            # --- 顯示回測結果 ---
+            st.subheader(f"📊 歷史回測結果 | 策略: {bb_strategy}")
             
             col1, col2, col3 = st.columns(3)
             if len(data) > 0:
@@ -182,7 +196,7 @@ if st.session_state.run_analysis:
                 name='月線 (20MA)'
             ))
 
-            # 布林通道 (上緣/下緣)
+            # 布林通道
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
 
