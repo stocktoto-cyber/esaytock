@@ -95,28 +95,27 @@ if st.session_state.run_analysis:
             data['Volume'] = data['Volume'] / 1000
 
             # 1. 計算技術指標
+            # BB_Mid 其實就是 20MA (月線)
             indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
             data["BB_High"] = indicator_bb.bollinger_hband()
             data["BB_Low"] = indicator_bb.bollinger_lband()
-            data["BB_Mid"] = indicator_bb.bollinger_mavg()
+            data["BB_Mid"] = indicator_bb.bollinger_mavg() 
             data["BB_Width"] = data["BB_High"] - data["BB_Low"]
             data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
             # 2. 篩選策略訊號
             condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
             
-            # 設定標記的「位置(y)」和「圖示(symbol)」
-            # 預設值
             signal_color = "orange"
             signal_name = "爆量訊號"
             marker_symbol = "triangle-down"
+            signal_y_position = data['High'] * 1.005 # 預設位置
             
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
                 condition_strategy = condition_vol & (data["Close"] >= data["BB_High"])
                 signal_color = "red"
                 signal_name = "爆量突破上緣"
-                marker_symbol = "triangle-down" 
-                # 【修改處】貼近上方：High * 1.005 (原本是 1.02)
+                marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005 
 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
@@ -124,8 +123,7 @@ if st.session_state.run_analysis:
                 signal_color = "green"
                 signal_name = "爆量跌破下緣"
                 marker_symbol = "triangle-up"
-                # 【修改處】貼近下方：Low * 0.995 (放在 K 線下面)
-                signal_y_position = data['Low'] * 0.995
+                signal_y_position = data['Low'] * 0.995 
 
             else:
                 condition_strategy = condition_vol
@@ -157,15 +155,21 @@ if st.session_state.run_analysis:
                 name='K線'
             ))
 
-            # 布林通道
+            # 【新增】月線 (20MA) - 使用藍色實線
+            fig.add_trace(go.Scatter(
+                x=data.index, 
+                y=data['BB_Mid'], 
+                line=dict(color='blue', width=1.5), 
+                name='月線 (20MA)'
+            ))
+
+            # 布林通道 (上緣/下緣)
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
 
             # 標記訊號
             if not signals.empty:
-                # 這裡要小心：signal_y_position 是一個 Series，我們只取 signals 的對應部分
                 plot_y = signal_y_position[signals.index]
-                
                 fig.add_trace(go.Scatter(
                     x=signals.index, 
                     y=plot_y,
@@ -175,7 +179,7 @@ if st.session_state.run_analysis:
                 ))
 
             fig.update_layout(
-                title=f"股價走勢圖 (標記: {signal_name})", 
+                title=f"股價走勢圖 (藍線為月線)", 
                 xaxis_rangeslider_visible=False, 
                 height=600
             )
