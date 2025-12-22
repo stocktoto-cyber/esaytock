@@ -8,7 +8,7 @@ import ta
 # --- 頁面設定 ---
 st.set_page_config(page_title="台股量價分析 (Neumorphism)", layout="wide")
 
-# --- 【關鍵修改】CSS 強制修正 (分離選單與輸入框顏色) ---
+# --- 【關鍵修改】CSS 樣式表 (灰色選單版本) ---
 st.markdown("""
 <style>
     /* --- 1. 全域變數 --- */
@@ -37,38 +37,42 @@ st.markdown("""
     }
 
     /* ============================================================
-       【核心修正區】下拉選單 (Selectbox) 顏色分離大法
+       【核心修正區】下拉選單顏色設定
        ============================================================ */
     
     /* 1. 【已選擇的狀態】 (顯示在頁面上的框框) 
-       目標：淺色凹陷背景 + 黑色文字 */
+       文字顏色：黑色 (確保在淺色框框中看得到) */
     div[data-baseweb="select"] > div {
-        color: #000000 !important;              /* 強制黑色文字 */
+        color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
-        background-color: transparent !important; /* 背景透明(透出下層的凹陷色) */
+        background-color: transparent !important;
     }
 
     /* 2. 【彈出的選單列表】 (Popup Menu) 
-       目標：深色背景 + 白色文字 (符合你截圖中的深色底) */
+       背景顏色：灰色 (你指定的要求) */
     ul[data-baseweb="menu"] {
-        background-color: #2d3436 !important;   /* 強制深色背景 */
+        background-color: #636e72 !important;   /* 修改這裡：黑色 -> 灰色 */
     }
     
-    /* 選單內的選項文字 */
+    /* 選單內的選項文字：白色 (配合灰色背景) */
     ul[data-baseweb="menu"] li div,
     ul[data-baseweb="menu"] li span {
-        color: #FFFFFF !important;              /* 強制白色文字 */
+        color: #FFFFFF !important;
     }
     
-    /* 滑鼠移過選項的高亮效果 (深灰底+白字) */
+    /* 滑鼠移過選項的高亮效果 (淺灰底+黑字) */
     ul[data-baseweb="menu"] li[aria-selected="false"]:hover {
-        background-color: #636e72 !important;
+        background-color: #b2bec3 !important;
+    }
+    ul[data-baseweb="menu"] li[aria-selected="false"]:hover span,
+    ul[data-baseweb="menu"] li[aria-selected="false"]:hover div {
+        color: #000000 !important;
     }
     
     /* 目前選中的選項 (在列表中) */
     ul[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #000000 !important;
-        color: #FF9F43 !important; /* 用橘色標示目前選中 */
+        background-color: #2d3436 !important; /* 深色凸顯選中項 */
+        color: #FF9F43 !important; /* 橘色文字 */
     }
 
     /* ============================================================ */
@@ -82,10 +86,10 @@ st.markdown("""
         border-radius: 12px !important;
         box-shadow: inset 4px 4px 8px var(--shadow-dark), 
                     inset -4px -4px 8px var(--shadow-light) !important;
-        padding: 5px 10px !important; /* 微調內距 */
+        padding: 5px 10px !important;
     }
     
-    /* 輸入框內的文字 (搜尋框、日期框) -> 黑色 */
+    /* 輸入框內的文字 -> 黑色 */
     input {
         color: #000000 !important;
     }
