@@ -61,14 +61,14 @@ bb_strategy = st.sidebar.radio(
     ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
 )
 
-# 【新增功能】寬容度微調
+# 【修改處】寬容度擴大至 10%
 bb_tolerance = st.sidebar.slider(
     "訊號觸發寬容度 (%)", 
     min_value=0.0, 
-    max_value=3.0, 
-    value=0.0, 
+    max_value=10.0, # 上限改為 10.0
+    value=1.0,      # 預設改為 1.0
     step=0.1, 
-    help="數值越大越寬鬆。例如設定 1%，代表股價只要接近上緣 1% 範圍內就會視為觸發，能增加出手訊號。"
+    help="數值越大越寬鬆。例如設定 5%，代表股價只要接近上緣 5% 範圍內就會視為觸發。"
 )
 
 bb_window = 20
@@ -121,14 +121,11 @@ if st.session_state.run_analysis:
             marker_symbol = "triangle-down"
             signal_y_position = data['High'] * 1.005 # 預設位置
             
-            # 【關鍵修改】加入寬容度 (Tolerance) 邏輯
-            # 如果寬容度是 1%，tolerance_factor = 0.01
+            # 計算寬容度因子
             tolerance_factor = bb_tolerance / 100.0
 
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
-                # 原本是 >= BB_High
-                # 現在只要 >= BB_High * (1 - tolerance)
-                # 例如：上緣是 100元，寬容度 1%，只要 >= 99元 就觸發
+                # 觸發價 = 上緣 * (1 - 寬容度)
                 trigger_price = data["BB_High"] * (1 - tolerance_factor)
                 condition_strategy = condition_vol & (data["Close"] >= trigger_price)
                 
@@ -138,9 +135,7 @@ if st.session_state.run_analysis:
                 signal_y_position = data['High'] * 1.005 
 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
-                # 原本是 <= BB_Low
-                # 現在只要 <= BB_Low * (1 + tolerance)
-                # 例如：下緣是 100元，寬容度 1%，只要 <= 101元 就觸發
+                # 觸發價 = 下緣 * (1 + 寬容度)
                 trigger_price = data["BB_Low"] * (1 + tolerance_factor)
                 condition_strategy = condition_vol & (data["Close"] <= trigger_price)
                 
