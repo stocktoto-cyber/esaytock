@@ -8,13 +8,13 @@ import ta
 # --- 頁面設定 ---
 st.set_page_config(page_title="台股量價分析 (Neumorphism)", layout="wide")
 
-# --- 【關鍵修改】強力 CSS 注入 (全亮色高對比方案) ---
+# --- 【關鍵修改】CSS 強制修正 (分離選單與輸入框顏色) ---
 st.markdown("""
 <style>
     /* --- 1. 全域變數 --- */
     :root {
         --bg-color: #EBECF0;        /* 淺灰藍背景 */
-        --text-color: #000000;      /* 純黑文字 (最安全) */
+        --text-color: #000000;      /* 預設黑字 */
         --shadow-light: #FFFFFF;    
         --shadow-dark: #b2bec3;     
     }
@@ -31,45 +31,63 @@ st.markdown("""
         box-shadow: inset -5px 0 10px var(--shadow-dark);
     }
 
-    /* 強制所有基本文字為黑色 */
-    h1, h2, h3, p, label, span, div, li {
+    /* 全域文字預設黑色 */
+    h1, h2, h3, p, label, span, div {
         color: var(--text-color);
     }
 
-    /* --- 【修正核心】下拉選單 (Selectbox) --- */
+    /* ============================================================
+       【核心修正區】下拉選單 (Selectbox) 顏色分離大法
+       ============================================================ */
     
-    /* 1. 修正「選單容器 (Popover)」背景 -> 強制白色 */
-    div[data-baseweb="popover"],
-    ul[data-baseweb="menu"] {
-        background-color: #FFFFFF !important;
+    /* 1. 【已選擇的狀態】 (顯示在頁面上的框框) 
+       目標：淺色凹陷背景 + 黑色文字 */
+    div[data-baseweb="select"] > div {
+        color: #000000 !important;              /* 強制黑色文字 */
+        -webkit-text-fill-color: #000000 !important;
+        background-color: transparent !important; /* 背景透明(透出下層的凹陷色) */
     }
 
-    /* 2. 修正「選單內的所有選項」文字 -> 強制黑色 */
+    /* 2. 【彈出的選單列表】 (Popup Menu) 
+       目標：深色背景 + 白色文字 (符合你截圖中的深色底) */
+    ul[data-baseweb="menu"] {
+        background-color: #2d3436 !important;   /* 強制深色背景 */
+    }
+    
+    /* 選單內的選項文字 */
     ul[data-baseweb="menu"] li div,
     ul[data-baseweb="menu"] li span {
-        color: #000000 !important;
-    }
-
-    /* 3. 修正「已選擇的項目 (顯示在框框內)」文字 -> 強制黑色 */
-    div[data-baseweb="select"] div {
-        color: #000000 !important;
+        color: #FFFFFF !important;              /* 強制白色文字 */
     }
     
-    /* 4. 修正「輸入框」文字 -> 強制黑色 */
-    input {
-        color: #000000 !important;
+    /* 滑鼠移過選項的高亮效果 (深灰底+白字) */
+    ul[data-baseweb="menu"] li[aria-selected="false"]:hover {
+        background-color: #636e72 !important;
     }
+    
+    /* 目前選中的選項 (在列表中) */
+    ul[data-baseweb="menu"] li[aria-selected="true"] {
+        background-color: #000000 !important;
+        color: #FF9F43 !important; /* 用橘色標示目前選中 */
+    }
+
+    /* ============================================================ */
 
     /* --- 2. 擬物化元件樣式 --- */
     
     /* 輸入框與選單外框 (凹陷效果) */
-    .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div {
+    .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div:first-child {
         background-color: var(--bg-color) !important;
         border: none !important;
         border-radius: 12px !important;
         box-shadow: inset 4px 4px 8px var(--shadow-dark), 
                     inset -4px -4px 8px var(--shadow-light) !important;
-        padding: 10px 15px !important;
+        padding: 5px 10px !important; /* 微調內距 */
+    }
+    
+    /* 輸入框內的文字 (搜尋框、日期框) -> 黑色 */
+    input {
+        color: #000000 !important;
     }
 
     /* Metric 卡片 (浮出效果) */
@@ -81,7 +99,6 @@ st.markdown("""
                    -8px -8px 16px var(--shadow-light);
     }
     
-    /* 數據顏色 (藍色) */
     div[data-testid="stMetricValue"] > div {
         color: #0984e3 !important;
         font-weight: 700;
@@ -91,7 +108,7 @@ st.markdown("""
     /* 按鈕 (亮橘色浮出) */
     .stButton button {
         background: linear-gradient(145deg, #ffab57, #e68f3c) !important;
-        color: white !important; /* 按鈕文字維持白色 */
+        color: white !important; 
         border: none !important;
         border-radius: 30px !important;
         box-shadow: 5px 5px 10px #cc7f36, -5px -5px 10px #ffbf60 !important;
