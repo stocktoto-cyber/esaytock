@@ -15,7 +15,7 @@ if 'run_analysis' not in st.session_state:
 
 # --- 側邊欄：控制面板 ---
 st.sidebar.header("1. 股票與期間")
-stock_id = st.sidebar.text_input("輸入股票代碼", value="2330")
+stock_id = st.sidebar.text_input("輸入股票代碼", value="00663L") # 預設改為使用者提到的 00663L 方便測試
 
 if stock_id and not stock_id.endswith('.TW') and not stock_id.endswith('.TWO'):
     ticker = f"{stock_id}.TW"
@@ -83,7 +83,11 @@ run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, typ
 @st.cache_data
 def load_data(ticker, start, end):
     try:
-        df = yf.download(ticker, start=str(start), end=str(end))
+        # 【關鍵修正】加入 auto_adjust=True
+        # 這會自動處理股票分割(Split)和股利(Dividend)，使用「還原權值」價格
+        # 這樣 00663L 的 K 線就會是連續的，不會有斷崖
+        df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True)
+        
         if df.empty:
             return None
         if isinstance(df.columns, pd.MultiIndex):
@@ -111,26 +115,22 @@ if st.session_state.run_analysis:
             data["BB_Width"] = data["BB_High"] - data["BB_Low"]
             data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
-            # --- 【新增功能】顯示最新行情資訊 ---
-            st.subheader(f"🎫 {ticker} 最新即時行情")
+            # --- 顯示最新行情資訊 ---
+            st.subheader(f"🎫 {ticker} 最新即時行情 (已還原權值)")
             
-            # 取得最後一筆資料
             latest = data.iloc[-1]
-            # 取得前一筆資料 (算漲跌幅用)
             prev = data.iloc[-2] if len(data) > 1 else latest
             
             diff = latest['Close'] - prev['Close']
             diff_pct = (diff / prev['Close']) * 100
             
-            # 建立四個欄位顯示資訊
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("目前股價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
             m2.metric("最新成交量 (張)", f"{latest['Volume']:,.0f}")
             m3.metric("布林上緣", f"{latest['BB_High']:.2f}")
             m4.metric("布林下緣", f"{latest['BB_Low']:.2f}")
             
-            st.markdown("---") # 分隔線
-            # ----------------------------------
+            st.markdown("---")
 
             # 2. 篩選策略訊號
             condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
@@ -212,7 +212,7 @@ if st.session_state.run_analysis:
                 ))
 
             fig.update_layout(
-                title=f"股價走勢圖 (藍線為月線)", 
+                title=f"股價走勢圖 (已還原分割權值)", 
                 xaxis_rangeslider_visible=False, 
                 height=600
             )
