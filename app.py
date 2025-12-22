@@ -8,139 +8,120 @@ import ta
 # --- 頁面設定 ---
 st.set_page_config(page_title="台股量價分析 (Neumorphism)", layout="wide")
 
-# --- 【關鍵修改】擬物化 (Neumorphism) 風格 CSS 注入 ---
+# --- 【關鍵修改】擬物化 CSS (修復下拉選單文字顏色) ---
 st.markdown("""
 <style>
-    /* --- 1. 全域變數與背景設定 --- */
+    /* --- 1. 全域變數 --- */
     :root {
-        --bg-color: #EBECF0;        /* 經典擬物化淺灰藍背景 */
-        --text-main: #4A4E69;       /* 深灰藍文字 (高對比) */
-        --text-sub: #9A9BAD;        /* 淺灰說明文字 */
-        --accent-orange: #FF9F43;   /* 參考圖的亮橘色 */
-        --accent-blue: #54A0FF;     /* 參考圖的亮藍色 */
-        --shadow-light: #FFFFFF;    /* 亮部陰影 */
-        --shadow-dark: #BABECC;     /* 暗部陰影 */
+        --bg-color: #EBECF0;        /* 淺灰藍背景 */
+        --text-main: #2d3436;       /* 深黑灰文字 (比之前更深，確保清晰) */
+        --text-sub: #636e72;        /* 次要文字 */
+        --accent-orange: #e17055;   /* 亮橘 */
+        --accent-blue: #0984e3;     /* 亮藍 */
+        --shadow-light: #FFFFFF;    
+        --shadow-dark: #b2bec3;     
     }
 
-    /* 強制全域背景 */
     .stApp {
         background-color: var(--bg-color);
         font-family: 'Segoe UI', sans-serif;
+        color: var(--text-main);
     }
 
-    /* 側邊欄背景與主畫面一致 */
+    /* 側邊欄背景 */
     section[data-testid="stSidebar"] {
         background-color: var(--bg-color);
         box-shadow: inset -5px 0 10px var(--shadow-dark);
     }
 
-    /* 全域文字顏色強制修正 (預設深色) */
-    h1, h2, h3, p, div, label, span {
-        color: var(--text-main) !important;
+    /* 全域文字顏色 (標題、標籤) */
+    h1, h2, h3, p, label, span, div {
+        color: var(--text-main);
     }
 
-    /* --- 【修正重點】下拉選單展開後的樣式 --- */
-    /* 因為上面強制了全域深色字，這裡必須把「展開後的選單」字體強制改回白色 */
-    ul[data-baseweb="menu"] li span,
-    ul[data-baseweb="menu"] li div,
-    div[data-baseweb="popover"] div,
-    div[data-baseweb="popover"] span {
-        color: #FFFFFF !important; /* 強制白色字體 */
+    /* --- 【修正重點】下拉選單與輸入框文字顏色 --- */
+    
+    /* 1. 針對「顯示在框框內」的已選擇文字 -> 強制黑色 */
+    .stSelectbox div[data-baseweb="select"] div {
+        color: #000000 !important; /* 強制黑色 */
     }
     
-    /* 確保選單背景是深色的 (配合白色字體) */
-    ul[data-baseweb="menu"], div[data-baseweb="popover"] {
-        background-color: #2d3436 !important;
+    /* 2. 針對「輸入框」內的文字 -> 強制黑色 */
+    .stTextInput input, .stDateInput input {
+        color: #000000 !important;
     }
 
-    /* --- 2. 卡片化元件 (浮出效果) --- */
-    /* Metric (數據卡片) */
+    /* 3. 針對「彈出的選單 (Popover/Menu)」 -> 維持深底白字 */
+    ul[data-baseweb="menu"] {
+        background-color: #2d3436 !important; /* 深色背景 */
+    }
+    ul[data-baseweb="menu"] li span, 
+    ul[data-baseweb="menu"] li div {
+        color: #FFFFFF !important; /* 選項文字白色 */
+    }
+
+    /* --- 2. 擬物化元件樣式 --- */
+    
+    /* 輸入框外觀 (凹陷效果) */
+    .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div {
+        background-color: var(--bg-color) !important;
+        border: none !important;
+        border-radius: 12px !important;
+        /* 內陰影 = 凹陷感 */
+        box-shadow: inset 4px 4px 8px var(--shadow-dark), 
+                    inset -4px -4px 8px var(--shadow-light) !important;
+        padding: 10px 15px !important;
+    }
+
+    /* Metric 卡片 (浮出效果) */
     div[data-testid="stMetric"] {
         background-color: var(--bg-color);
         border-radius: 20px;
         padding: 20px;
         box-shadow: 8px 8px 16px var(--shadow-dark), 
                    -8px -8px 16px var(--shadow-light);
-        border: none;
-        text-align: center;
     }
-    
     div[data-testid="stMetricValue"] > div {
         color: var(--accent-blue) !important;
         font-weight: 700;
         font-size: 28px !important;
-        text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
-    }
-    
-    div[data-testid="stMetricLabel"] > label {
-        color: var(--text-sub) !important;
-        font-size: 14px;
     }
 
-    /* --- 3. 輸入元件 (凹陷效果) --- */
-    /* 文字輸入框、日期、下拉選單(未展開) */
-    .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div {
-        background-color: var(--bg-color) !important;
-        border: none !important;
-        border-radius: 12px !important;
-        color: var(--text-main) !important;
-        box-shadow: inset 4px 4px 8px var(--shadow-dark), 
-                    inset -4px -4px 8px var(--shadow-light) !important;
-        padding: 10px 15px !important;
-    }
-    
-    /* 修正下拉選單(未展開時)的文字顏色 */
-    div[data-baseweb="select"] span {
-        color: var(--text-main) !important;
-    }
-
-    /* Radio Button 外觀優化 */
-    div[role="radiogroup"] {
-        background: transparent;
-    }
-    div[role="radiogroup"] label {
-        background-color: var(--bg-color);
-        padding: 8px 16px;
-        border-radius: 10px;
-        margin-bottom: 8px;
-        box-shadow: 5px 5px 10px var(--shadow-dark), 
-                   -5px -5px 10px var(--shadow-light);
-        border: 1px solid rgba(255,255,255,0.2);
-    }
-
-    /* --- 4. 按鈕 (亮橘色) --- */
+    /* 按鈕 (亮橘色浮出) */
     .stButton button {
         background: linear-gradient(145deg, #ffab57, #e68f3c) !important;
         color: white !important;
         border: none !important;
         border-radius: 30px !important;
-        padding: 12px 30px !important;
-        font-weight: bold !important;
-        letter-spacing: 1px;
-        box-shadow: 5px 5px 10px #cc7f36, 
-                   -5px -5px 10px #ffbf60 !important;
-        transition: all 0.2s ease;
+        box-shadow: 5px 5px 10px #cc7f36, -5px -5px 10px #ffbf60 !important;
+        font-weight: bold;
     }
-    
     .stButton button:active {
-        box-shadow: inset 3px 3px 6px #cc7f36, 
-                    inset -3px -3px 6px #ffbf60 !important;
-        transform: scale(0.98);
+        box-shadow: inset 3px 3px 6px #cc7f36, inset -3px -3px 6px #ffbf60 !important;
+    }
+
+    /* Radio Group */
+    div[role="radiogroup"] label {
+        background-color: var(--bg-color);
+        padding: 8px 16px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+        border: 1px solid rgba(255,255,255,0.2);
     }
     
-    /* --- 5. 表格與圖表 --- */
+    /* 表格與圖表容器 */
     div[data-testid="stDataFrame"] {
         padding: 15px;
         border-radius: 20px;
-        box-shadow: inset 5px 5px 10px var(--shadow-dark), 
-                    inset -5px -5px 10px var(--shadow-light);
         background-color: var(--bg-color);
+        box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
     }
     
+    /* Plotly 背景透明 */
     .js-plotly-plot .plotly .main-svg {
         background: transparent !important;
     }
-    
 </style>
 """, unsafe_allow_html=True)
 
@@ -245,7 +226,7 @@ if st.session_state.run_analysis:
             color_red = "#FF5252"
             color_green = "#26de81"
             color_orange = "#FF9F43"
-            color_blue = "#54A0FF"
+            color_blue = "#0984e3"
 
             signal_color = color_orange
             signal_name = "爆量訊號"
@@ -303,19 +284,19 @@ if st.session_state.run_analysis:
                 ))
 
             fig.update_layout(
-                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="#4A4E69", size=20)),
+                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="#2d3436", size=20)),
                 xaxis_rangeslider_visible=False, 
                 height=600,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=20, r=20, t=50, b=20),
-                font=dict(family="Segoe UI, sans-serif", color="#4A4E69"),
-                xaxis=dict(showgrid=True, gridcolor='#D1D9E6'),
-                yaxis=dict(showgrid=True, gridcolor='#D1D9E6')
+                font=dict(family="Segoe UI, sans-serif", color="#2d3436"),
+                xaxis=dict(showgrid=True, gridcolor='#dfe6e9'),
+                yaxis=dict(showgrid=True, gridcolor='#dfe6e9')
             )
             
             st.markdown("""
-            <div style="background-color: #EBECF0; padding: 20px; border-radius: 20px; box-shadow: 8px 8px 16px #BABECC, -8px -8px 16px #FFFFFF;">
+            <div style="background-color: #EBECF0; padding: 20px; border-radius: 20px; box-shadow: 8px 8px 16px #b2bec3, -8px -8px 16px #FFFFFF;">
             """, unsafe_allow_html=True)
             st.plotly_chart(fig, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -337,4 +318,4 @@ if st.session_state.run_analysis:
         else:
             st.error(f"找不到代碼 {ticker} 的資料。")
 else:
-    st.markdown("<br><br><div style='text-align: center; color: #9A9BAD;'>👈 請在左側輸入代碼，並按下「🚀 開始執行分析」</div>", unsafe_allow_html=True)
+    st.markdown("<br><br><div style='text-align: center; color: #636e72;'>👈 請在左側輸入代碼，並按下「🚀 開始執行分析」</div>", unsafe_allow_html=True)
