@@ -7,24 +7,27 @@ import ta
 
 # --- 1. 頁面設定 ---
 st.set_page_config(
-    page_title="台股量價回測(手機觸控版)", 
+    page_title="台股量價回測(觸控優化)", 
     page_icon="📈",
     layout="centered", 
     initial_sidebar_state="collapsed"
 )
 
-# 自訂 CSS 以優化手機版間距
+# 自訂 CSS：加大數據字體，並調整圖表邊距
 st.markdown("""
     <style>
-    .stMetricLabel {font-size: 14px !important;}
-    .stMetricValue {font-size: 20px !important;}
+    /* 加大指標數值的字體 */
+    .stMetricLabel {font-size: 15px !important; font-weight: bold !important;}
+    .stMetricValue {font-size: 24px !important;}
+    
+    /* 調整 Plotly 圖表在手機上的滿版效果 */
     .stPlotlyChart {
         margin-left: -10px; margin-right: -10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📈 台股量價回測 (觸控優化)")
+st.title("📈 台股量價回測 (觸控版)")
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
@@ -42,7 +45,6 @@ else:
 
 # --- 3. 摺疊式設定選單 ---
 with st.expander("⚙️ 點此設定日期與策略參數", expanded=False):
-    
     st.caption("📅 日期設定")
     period_option = st.selectbox(
         "選擇回測區間",
@@ -144,7 +146,7 @@ if st.session_state.run_analysis:
     diff = latest['Close'] - prev['Close']
     diff_pct = (diff / prev['Close']) * 100
     
-    # 【修正點】移除 anchor=False 以相容舊版 Streamlit
+    # 修正：移除 anchor=False
     st.subheader(f"🎫 {ticker} 行情") 
     st.caption(f"最新資料日期: {latest.name.strftime('%Y-%m-%d')}")
 
@@ -181,7 +183,7 @@ if st.session_state.run_analysis:
     signals = data[condition_strategy]
 
     # --- 5. 回測統計 ---
-    # 【修正點】移除 anchor=False 以相容舊版 Streamlit
+    # 修正：移除 anchor=False
     st.markdown("### 📊 回測績效") 
     roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
     
@@ -190,7 +192,7 @@ if st.session_state.run_analysis:
     s2.metric("觸發次數", f"{len(signals)}")
     s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.2f}")
 
-    # --- 6. 圖表優化 (含手機觸控功能) ---
+    # --- 6. 圖表優化 (CSS與樣式修正重點) ---
     fig = go.Figure()
 
     # K線
@@ -202,9 +204,9 @@ if st.session_state.run_analysis:
     ))
 
     # 布林帶
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Upper', legendgroup="BB"))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='rgba(128,128,128,0.5)', width=1), name='BB Lower', fill='tonexty', fillcolor='rgba(128,128,128,0.1)', legendgroup="BB"))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='blue', width=1.5), name='MA20', legendgroup="BB"))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='rgba(200,200,200,0.5)', width=1), name='BB Upper', legendgroup="BB"))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='rgba(200,200,200,0.5)', width=1), name='BB Lower', fill='tonexty', fillcolor='rgba(255,255,255,0.05)', legendgroup="BB"))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='#2979FF', width=1.5), name='MA20', legendgroup="BB"))
 
     # 訊號
     if not signals.empty:
@@ -221,11 +223,16 @@ if st.session_state.run_analysis:
         title_font_size=16,
         height=550,
         margin=dict(l=10, r=10, t=60, b=20),
+        
+        # 【修正 1】優化圖例樣式：深色半透明背景，白色邊框，避免看不清
         legend=dict(
             orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
-            bgcolor="rgba(255,255,255,0.6)",
-            font=dict(size=11)
+            bgcolor="rgba(0,0,0,0.7)", 
+            bordercolor="white",
+            borderwidth=1,
+            font=dict(size=12, color="white")
         ),
+        
         xaxis=dict(
             rangeslider=dict(visible=True, thickness=0.12),
             type="date",
@@ -248,7 +255,15 @@ if st.session_state.run_analysis:
         ),
         dragmode='pan',
         hovermode='x unified',
-        hoverlabel=dict(bgcolor="rgba(255,255,255,0.9)", font_size=12)
+        
+        # 【修正 2】優化資訊框 (Tooltip) 樣式：高對比色 (白底黑字)
+        hoverlabel=dict(
+            bgcolor="white",          # 純白背景
+            font_size=14,             # 加大字體
+            font_color="black",       # 強制黑色字體
+            font_family="Roboto, Arial",
+            bordercolor="#333333"     # 深色邊框
+        )
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': True})
