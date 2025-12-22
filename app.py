@@ -6,142 +6,145 @@ from datetime import datetime, timedelta, date
 import ta
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="台股量價分析 (iOS Style)", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="台股量價分析 (Neumorphism)", layout="wide")
 
-# --- 【關鍵修改】強力 iOS 風格 CSS 注入 (修復對比度問題) ---
+# --- 【關鍵修改】擬物化 (Neumorphism) 風格 CSS 注入 ---
 st.markdown("""
 <style>
-    /* --- 全域變數定義 (強制淺色主題色票) --- */
+    /* --- 1. 全域變數與背景設定 --- */
     :root {
-        --ios-bg-main: #F2F2F7;       /* iOS 系統背景灰 */
-        --ios-bg-secondary: #FFFFFF;  /* iOS 卡片白 */
-        --ios-text-primary: #000000;  /* 深黑文字 */
-        --ios-text-secondary: #8E8E93;/* 淺灰說明文字 */
-        --ios-blue: #007AFF;          /* iOS 系統藍 */
-        --ios-red: #FF3B30;           /* iOS 系統紅 */
-        --ios-green: #34C759;         /* iOS 系統綠 */
-        --ios-orange: #FF9500;        /* iOS 系統橘 */
-        --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --bg-color: #EBECF0;        /* 經典擬物化淺灰藍背景 */
+        --text-main: #4A4E69;       /* 深灰藍文字 (高對比) */
+        --text-sub: #9A9BAD;        /* 淺灰說明文字 */
+        --accent-orange: #FF9F43;   /* 參考圖的亮橘色 */
+        --accent-blue: #54A0FF;     /* 參考圖的亮藍色 */
+        --shadow-light: #FFFFFF;    /* 亮部陰影 */
+        --shadow-dark: #BABECC;     /* 暗部陰影 */
     }
 
-    /* 強制全域字體與背景色 */
-    html, body, .stApp {
-        font-family: var(--font-stack) !important;
-        background-color: var(--ios-bg-main) !important;
-        color: var(--ios-text-primary) !important;
+    /* 強制全域背景 */
+    .stApp {
+        background-color: var(--bg-color);
+        font-family: 'Segoe UI', sans-serif;
     }
 
-    /* --- 側邊欄優化 --- */
+    /* 側邊欄背景與主畫面一致，打造一體成型感 */
     section[data-testid="stSidebar"] {
-        background-color: var(--ios-bg-secondary) !important;
-        border-right: 1px solid #E5E5EA;
-        box-shadow: none !important;
-    }
-    
-    /* 強制側邊欄所有文字為深色 */
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3, 
-    section[data-testid="stSidebar"] label, 
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] div {
-        color: var(--ios-text-primary) !important;
+        background-color: var(--bg-color);
+        box-shadow: inset -5px 0 10px var(--shadow-dark); /* 側邊欄內陰影 */
     }
 
-    /* --- 輸入元件優化 (圓角 + 白底黑字) --- */
-    /* 文字輸入框、日期選擇器 */
-    .stTextInput input, .stDateInput input {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #D1D1D6 !important;
-        border-radius: 12px !important;
-        padding: 10px !important;
-    }
-    /* 下拉選單與 Radio 按鈕 */
-    div[data-baseweb="select"] > div, div[role="radiogroup"] {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border-radius: 12px !important;
-        border: 1px solid #D1D1D6 !important;
-    }
-    /* 滑桿文字顏色 */
-    div[data-testid="stSlider"] label {
-        color: var(--ios-text-primary) !important;
+    /* 全域文字顏色強制修正 */
+    h1, h2, h3, p, div, label, span {
+        color: var(--text-main) !important;
     }
 
-    /* --- 主畫面元件優化 --- */
-    /* 標題強制深色 */
-    h1, h2, h3, .plotly-graph-div title {
-        color: var(--ios-text-primary) !important;
-        font-weight: 700 !important;
-    }
-
-    /* Metric 卡片化設計 (關鍵修復) */
+    /* --- 2. 卡片化元件 (浮出效果) --- */
+    /* Metric (數據卡片) */
     div[data-testid="stMetric"] {
-        background-color: #FFFFFF !important;
-        padding: 20px !important;
-        border-radius: 20px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
-        border: none !important;
+        background-color: var(--bg-color);
+        border-radius: 20px;
+        padding: 20px;
+        /* 擬物化核心：雙重陰影 (外凸) */
+        box-shadow: 8px 8px 16px var(--shadow-dark), 
+                   -8px -8px 16px var(--shadow-light);
+        border: none;
         text-align: center;
     }
-    /* Metric 標籤 (淺灰) */
-    div[data-testid="stMetricLabel"] > label {
-        color: var(--ios-text-secondary) !important;
-        font-size: 14px !important;
-        font-weight: 500 !important;
-    }
-    /* Metric 數值 (深黑大字) */
+    
+    /* 數值文字樣式 */
     div[data-testid="stMetricValue"] > div {
-        color: var(--ios-text-primary) !important;
-        font-size: 32px !important;
-        font-weight: 700 !important;
-        padding-top: 5px;
-    }
-
-    /* 按鈕樣式 (iOS 藍) */
-    .stButton button {
-        background-color: var(--ios-blue) !important;
-        color: white !important;
-        border-radius: 16px !important;
-        border: none !important;
-        padding: 12px 28px !important;
-        font-weight: 600 !important;
-        font-size: 17px !important;
-        width: 100%; /* 按鈕填滿寬度 */
-        box-shadow: 0 4px 10px rgba(0, 122, 255, 0.3);
-    }
-    .stButton button:hover { box-shadow: 0 6px 15px rgba(0, 122, 255, 0.4); }
-    .stButton button:active { transform: scale(0.98); }
-
-    /* 表格樣式優化 (白底黑字) */
-    div[data-testid="stDataFrame"] {
-        background-color: #FFFFFF;
-        padding: 15px;
-        border-radius: 20px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    }
-    div[data-testid="stDataFrame"] * {
-        color: var(--ios-text-primary) !important;
-        font-family: var(--font-stack) !important;
+        color: var(--accent-blue) !important; /* 數據用藍色 */
+        font-weight: 700;
+        font-size: 28px !important;
+        text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
     }
     
-    /* Plotly 圖表背景修正 */
-    .js-plotly-plot .plotly .main-svg {
-        background-color: rgba(0,0,0,0) !important; /* 讓圖表背景透明，透出網頁背景 */
+    /* 標籤文字 */
+    div[data-testid="stMetricLabel"] > label {
+        color: var(--text-sub) !important;
+        font-size: 14px;
     }
+
+    /* --- 3. 輸入元件 (凹陷效果) --- */
+    /* 文字輸入框、日期、下拉選單 */
+    .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div {
+        background-color: var(--bg-color) !important;
+        border: none !important;
+        border-radius: 12px !important;
+        color: var(--text-main) !important;
+        /* 擬物化核心：內陰影 (凹陷) */
+        box-shadow: inset 4px 4px 8px var(--shadow-dark), 
+                    inset -4px -4px 8px var(--shadow-light) !important;
+        padding: 10px 15px !important;
+    }
+    
+    /* 修正下拉選單的文字顏色 */
+    div[data-baseweb="select"] span {
+        color: var(--text-main) !important;
+    }
+
+    /* Radio Button 外觀優化 */
+    div[role="radiogroup"] {
+        background: transparent;
+    }
+    div[role="radiogroup"] label {
+        background-color: var(--bg-color);
+        padding: 8px 16px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), 
+                   -5px -5px 10px var(--shadow-light);
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* --- 4. 按鈕 (參考圖的亮橘色) --- */
+    .stButton button {
+        background: linear-gradient(145deg, #ffab57, #e68f3c) !important; /* 橘色漸層 */
+        color: white !important;
+        border: none !important;
+        border-radius: 30px !important; /* 膠囊狀 */
+        padding: 12px 30px !important;
+        font-weight: bold !important;
+        letter-spacing: 1px;
+        box-shadow: 5px 5px 10px #cc7f36, 
+                   -5px -5px 10px #ffbf60 !important;
+        transition: all 0.2s ease;
+    }
+    
+    /* 按鈕按下效果 (凹下去) */
+    .stButton button:active {
+        box-shadow: inset 3px 3px 6px #cc7f36, 
+                    inset -3px -3px 6px #ffbf60 !important;
+        transform: scale(0.98);
+    }
+    
+    /* --- 5. 表格與圖表 --- */
+    div[data-testid="stDataFrame"] {
+        padding: 15px;
+        border-radius: 20px;
+        box-shadow: inset 5px 5px 10px var(--shadow-dark), 
+                    inset -5px -5px 10px var(--shadow-light);
+        background-color: var(--bg-color);
+    }
+    
+    /* 隱藏 Plotly 的背景顏色，讓它透出網頁背景 */
+    .js-plotly-plot .plotly .main-svg {
+        background: transparent !important;
+    }
+    
 </style>
 """, unsafe_allow_html=True)
 
-# --- 主標題 (使用 HTML 讓它更像 App 標題) ---
-st.markdown(f"<h1 style='text-align: center; color: #000000; margin-bottom: 30px;'>📈 台股量價分析</h1>", unsafe_allow_html=True)
+# --- 標題 (微調字體) ---
+st.markdown("<h1 style='text-align: center; margin-bottom: 30px; letter-spacing: 2px;'>📈 台股量價分析</h1>", unsafe_allow_html=True)
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
     st.session_state.run_analysis = False
 
 # --- 側邊欄 ---
-st.sidebar.header("1. 股票與期間")
+st.sidebar.markdown("### 🔍 搜尋與設定")
 stock_id = st.sidebar.text_input("輸入股票代碼", value="2330")
 
 if stock_id and not stock_id.endswith('.TW') and not stock_id.endswith('.TWO'):
@@ -179,23 +182,25 @@ elif period_option == "自訂日期":
     with col_d2:
         end_date = st.date_input("結束日期", today)
 
-st.sidebar.header("2. 策略參數設定")
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ⚙️ 策略參數")
 vol_multiplier = st.sidebar.slider("成交量爆發倍數 (vs 20日均量)", 1.0, 3.0, 1.5, 0.1)
 
-st.sidebar.subheader("布林通道位置篩選")
+st.sidebar.markdown("### 📉 布林策略")
 bb_strategy = st.sidebar.radio(
-    "選擇訊號過濾條件",
+    "訊號過濾條件",
     ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
 )
 
 bb_window = 20
 bb_std = 2
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
+
 def start_click():
     st.session_state.run_analysis = True
 
-# 按鈕 (CSS 會自動套用 iOS 藍色樣式)
+# 按鈕 (CSS 會自動套用橘色擬物風格)
 run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click)
 
 # --- 數據處理 ---
@@ -230,26 +235,26 @@ if st.session_state.run_analysis:
             # 篩選訊號
             condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
             
-            # iOS 色票定義
-            ios_red = "#FF3B30"
-            ios_green = "#34C759"
-            ios_orange = "#FF9500"
-            ios_blue = "#007AFF"
+            # 顏色設定 (配合擬物風格，使用稍微柔和一點的顏色)
+            color_red = "#FF5252"
+            color_green = "#26de81"
+            color_orange = "#FF9F43"
+            color_blue = "#54A0FF"
 
-            signal_color = ios_orange
+            signal_color = color_orange
             signal_name = "爆量訊號"
             marker_symbol = "triangle-down"
             signal_y_position = data['High'] * 1.005 
             
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
                 condition_strategy = condition_vol & (data["Close"] >= data["BB_High"])
-                signal_color = ios_red
+                signal_color = color_red
                 signal_name = "爆量突破上緣"
                 marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
                 condition_strategy = condition_vol & (data["Close"] <= data["BB_Low"])
-                signal_color = ios_green
+                signal_color = color_green
                 signal_name = "爆量跌破下緣"
                 marker_symbol = "triangle-up"
                 signal_y_position = data['Low'] * 0.995 
@@ -258,8 +263,8 @@ if st.session_state.run_analysis:
 
             signals = data[condition_strategy]
             
-            # --- 顯示結果 (iOS 卡片風格) ---
-            st.markdown(f"<h3 style='color: black;'>📊 {ticker} 分析結果 | 策略: {bb_strategy}</h3>", unsafe_allow_html=True)
+            # --- 顯示結果 (Neumorphism Card) ---
+            st.markdown(f"<h3 style='margin-left: 10px;'>📊 {ticker} 分析結果</h3>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
@@ -271,7 +276,7 @@ if st.session_state.run_analysis:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- 繪圖 ---
+            # --- 繪圖 (透明背景，融入擬物風格) ---
             fig = go.Figure()
 
             # K線
@@ -282,37 +287,43 @@ if st.session_state.run_analysis:
                 name='K線'
             ))
 
-            # 月線 (20MA) - 使用 iOS 藍
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color=ios_blue, width=1.5), name='月線 (20MA)'))
+            # 月線 (20MA) - 使用亮藍色
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color=color_blue, width=2), name='月線 (20MA)'))
 
-            # 布林通道
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
-            fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
+            # 布林通道 (虛線)
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='#A0A0A0', width=1, dash='dot'), name='布林上緣'))
+            fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='#A0A0A0', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
 
             # 標記訊號
             if not signals.empty:
                 plot_y = signal_y_position[signals.index]
                 fig.add_trace(go.Scatter(
                     x=signals.index, y=plot_y, mode='markers',
-                    marker=dict(symbol=marker_symbol, size=12, color=signal_color),
+                    marker=dict(symbol=marker_symbol, size=14, color=signal_color, line=dict(width=1, color='white')), # 加上白邊增加立體感
                     name=signal_name
                 ))
 
             fig.update_layout(
-                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="black", size=20)),
+                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="#4A4E69", size=20)),
                 xaxis_rangeslider_visible=False, 
                 height=600,
-                paper_bgcolor='rgba(0,0,0,0)', # 讓圖表外框透明
-                plot_bgcolor='#FFFFFF',        # 繪圖區維持白色
+                paper_bgcolor='rgba(0,0,0,0)', # 透明背景
+                plot_bgcolor='rgba(0,0,0,0)',  # 透明繪圖區
                 margin=dict(l=20, r=20, t=50, b=20),
-                font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif", color="black"), # 強制圖表文字黑色
-                xaxis=dict(showgrid=True, gridcolor='#E5E5EA'), # 網格線改淺灰
-                yaxis=dict(showgrid=True, gridcolor='#E5E5EA')
+                font=dict(family="Segoe UI, sans-serif", color="#4A4E69"),
+                xaxis=dict(showgrid=True, gridcolor='#D1D9E6'), # 網格線改為與背景融合的深色
+                yaxis=dict(showgrid=True, gridcolor='#D1D9E6')
             )
+            
+            # 使用 container 包裹圖表以增加陰影 (模擬圖表也是一個卡片)
+            st.markdown("""
+            <div style="background-color: #EBECF0; padding: 20px; border-radius: 20px; box-shadow: 8px 8px 16px #BABECC, -8px -8px 16px #FFFFFF;">
+            """, unsafe_allow_html=True)
             st.plotly_chart(fig, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- 詳細數據表格 (白底黑字) ---
-            st.markdown("<h3 style='color: black; margin-top: 30px;'>🔎 策略訊號詳細數據</h3>", unsafe_allow_html=True)
+            # --- 詳細數據表格 ---
+            st.markdown("<br><h3 style='margin-left: 10px;'>🔎 詳細數據</h3>", unsafe_allow_html=True)
             if not signals.empty:
                 display_df = signals[['Close', 'Volume', 'Vol_MA20', 'BB_High', 'BB_Low', 'BB_Width']].copy()
                 display_df['Volume_Ratio'] = display_df['Volume'] / display_df['Vol_MA20']
@@ -328,5 +339,5 @@ if st.session_state.run_analysis:
         else:
             st.error(f"找不到代碼 {ticker} 的資料。")
 else:
-    # 初始畫面提示 (深色文字)
-    st.markdown("<div style='text-align: center; color: #8E8E93; padding: 50px;'>👈 請在左側設定參數，並按下「🚀 開始執行分析」按鈕。</div>", unsafe_allow_html=True)
+    # 初始畫面提示
+    st.markdown("<br><br><div style='text-align: center; color: #9A9BAD;'>👈 請在左側輸入代碼，並按下「🚀 開始執行分析」</div>", unsafe_allow_html=True)
