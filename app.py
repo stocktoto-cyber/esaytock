@@ -5,13 +5,13 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta, date
 import ta
 
-# --- 頁面設定 (手機版面優化) ---
+# --- 頁面設定 (手機優先) ---
 st.set_page_config(page_title="台股量價分析 (Mobile)", layout="wide", initial_sidebar_state="collapsed")
 
-# --- CSS 樣式表 (擬物化 + 手機優化) ---
+# --- CSS 樣式表 (手機版優化 + 高對比配色) ---
 st.markdown("""
 <style>
-    /* --- 1. 全域變數 --- */
+    /* --- 全域設定 --- */
     :root {
         --bg-color: #EBECF0;
         --text-color: #000000;
@@ -25,7 +25,7 @@ st.markdown("""
         color: var(--text-color);
     }
 
-    /* 隱藏側邊欄 (因為我們要把控制項移到主畫面) */
+    /* 隱藏側邊欄 (手機版改用 Expander) */
     [data-testid="stSidebar"] {
         display: none;
     }
@@ -35,52 +35,44 @@ st.markdown("""
         color: var(--text-color);
     }
 
-    /* --- 下拉選單顏色修正 --- */
+    /* --- 下拉選單顏色修正 (確保手機選單看得到字) --- */
     div[data-baseweb="select"] > div {
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         background-color: transparent !important;
     }
     ul[data-baseweb="menu"] {
-        background-color: #636e72 !important;
+        background-color: #636e72 !important; /* 選單深灰底 */
     }
     ul[data-baseweb="menu"] li div,
     ul[data-baseweb="menu"] li span {
-        color: #FFFFFF !important;
+        color: #FFFFFF !important; /* 選項白字 */
     }
-    ul[data-baseweb="menu"] li[aria-selected="false"]:hover {
-        background-color: #b2bec3 !important;
-    }
-    ul[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #2d3436 !important;
-        color: #FF9F43 !important;
-    }
-
-    /* --- 擬物化元件 --- */
+    
+    /* --- 元件擬物化風格 --- */
     .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div:first-child {
         background-color: var(--bg-color) !important;
         border: none !important;
         border-radius: 12px !important;
-        box-shadow: inset 4px 4px 8px var(--shadow-dark), 
-                    inset -4px -4px 8px var(--shadow-light) !important;
-        padding: 5px 10px !important;
+        box-shadow: inset 3px 3px 6px var(--shadow-dark), 
+                    inset -3px -3px 6px var(--shadow-light) !important;
+        padding: 8px 10px !important;
     }
-    
     input { color: #000000 !important; }
 
+    /* Metric 卡片 (手機版間距優化) */
     div[data-testid="stMetric"] {
         background-color: var(--bg-color);
-        border-radius: 20px;
-        padding: 15px; /* 手機版稍微縮小 padding */
-        box-shadow: 6px 6px 12px var(--shadow-dark), 
-                   -6px -6px 12px var(--shadow-light);
-        margin-bottom: 10px;
+        border-radius: 15px;
+        padding: 10px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), 
+                   -5px -5px 10px var(--shadow-light);
+        margin-bottom: 8px;
     }
-    
     div[data-testid="stMetricValue"] > div {
         color: #0984e3 !important;
         font-weight: 700;
-        font-size: 24px !important; /* 手機版字體微調 */
+        font-size: 22px !important; /* 手機字體適中 */
     }
 
     /* 按鈕優化 (全寬、好按) */
@@ -88,32 +80,28 @@ st.markdown("""
         background: linear-gradient(145deg, #ffab57, #e68f3c) !important;
         color: white !important; 
         border: none !important;
-        border-radius: 15px !important; /* 手機版圓角稍微小一點比較好排 */
+        border-radius: 12px !important;
         box-shadow: 4px 4px 8px #cc7f36, -4px -4px 8px #ffbf60 !important;
         font-weight: bold;
         font-size: 18px !important;
-        padding: 15px 0 !important; /* 增加高度，方便手指點擊 */
+        padding: 12px 0 !important;
+        width: 100%;
     }
     .stButton button:active {
         box-shadow: inset 3px 3px 6px #cc7f36, inset -3px -3px 6px #ffbf60 !important;
     }
-    
-    /* Expander 優化 (讓設定區塊明顯) */
+
+    /* Expander 設定面板樣式 */
     .streamlit-expanderHeader {
         background-color: var(--bg-color);
         border-radius: 10px;
-        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+        box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
         color: #000000 !important;
         font-weight: bold;
+        margin-bottom: 10px;
     }
     
-    div[data-testid="stDataFrame"] {
-        padding: 10px;
-        border-radius: 15px;
-        background-color: var(--bg-color);
-        box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
-    }
-    
+    /* 圖表背景透明 */
     .js-plotly-plot .plotly .main-svg {
         background: transparent !important;
     }
@@ -121,41 +109,42 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 標題 ---
-st.markdown("<h2 style='text-align: center; margin-bottom: 20px; letter-spacing: 1px;'>📈 台股量價分析</h2>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; margin-bottom: 15px;'>📈 台股量價分析 (Mobile)</h3>", unsafe_allow_html=True)
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
     st.session_state.run_analysis = False
 
 # ==========================================
-#  📱 手機版控制面板 (使用 Expander 取代 Sidebar)
+#  📱 手機版控制面板 (Expander 取代 Sidebar)
 # ==========================================
-with st.expander("🛠️ 點擊展開/收合 設定面板", expanded=not st.session_state.run_analysis):
+# 預設如果還沒執行過，就展開讓使用者設定；執行過就收起來讓使用者看圖
+with st.expander("🛠️ 點擊展開設定 (股票/日期/策略)", expanded=not st.session_state.run_analysis):
     
-    # 第一列：股票代碼 + 強制更新
-    c1, c2 = st.columns([2, 1]) 
+    # Row 1: 股票代碼 + 強制更新
+    c1, c2 = st.columns([2, 1])
     with c1:
-        stock_id = st.text_input("股票代碼 (例: 2330)", value="2330")
+        stock_id = st.text_input("股票代碼", value="00663L")
     with c2:
-        st.write("") # 為了排版對齊
+        st.write("") # 排版佔位
         st.write("") 
-        if st.button("🔄 更新", use_container_width=True):
+        if st.button("🔄 更新", key="update_btn", help="強制清除快取"):
             st.cache_data.clear()
             st.session_state.run_analysis = True
 
-    # 處理代碼後綴
+    # 處理代碼
     if stock_id and not stock_id.endswith('.TW') and not stock_id.endswith('.TWO'):
         ticker = f"{stock_id}.TW"
     else:
         ticker = stock_id
 
-    # 第二列：期間選擇
+    # Row 2: 回測區間
     period_option = st.selectbox(
         "選擇回測區間",
         ["近一年", "近三年", "近五年", "AI爆發期 (2023-至今)", "疫情期間 (2020-2022)", "美中貿易戰 (2018-2019)", "自訂日期"]
     )
 
-    # 日期邏輯
+    # 日期邏輯 (保留您原始邏輯)
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1)
     start_date = today - timedelta(days=365)
@@ -176,30 +165,28 @@ with st.expander("🛠️ 點擊展開/收合 設定面板", expanded=not st.ses
         start_date = date(2018, 1, 1)
         end_date = date(2020, 1, 15)
     elif period_option == "自訂日期":
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            start_date = st.date_input("開始日期", today - timedelta(days=365))
-        with col_d2:
-            user_end_date = st.date_input("結束日期", today)
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            start_date = st.date_input("開始", today - timedelta(days=365))
+        with d_col2:
+            user_end_date = st.date_input("結束", today)
             if user_end_date == today:
                 end_date = tomorrow
             else:
                 end_date = user_end_date
 
-    st.markdown("---") # 分隔線
+    st.markdown("---")
 
-    # 第三列：策略設定
-    st.write("📊 **策略條件設定**")
-    
-    # 使用 columns 讓手機版也不會太長
-    c_strat1, c_strat2 = st.columns(2)
-    with c_strat1:
-        vol_multiplier = st.slider("成交量倍數", 1.0, 3.0, 1.5, 0.1)
-    with c_strat2:
-        bb_tolerance = st.slider("寬容度 (%)", 0.0, 10.0, 1.0, 0.1)
+    # Row 3: 策略參數 (使用 columns 讓手機版滑桿不會太長)
+    st.write("📊 **策略參數**")
+    s_col1, s_col2 = st.columns(2)
+    with s_col1:
+        vol_multiplier = st.slider("量增倍數", 1.0, 3.0, 1.5, 0.1)
+    with s_col2:
+        bb_tolerance = st.slider("寬容度(%)", 0.0, 10.0, 1.0, 0.1)
 
     bb_strategy = st.radio(
-        "布林篩選條件",
+        "訊號條件",
         ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
     )
     
@@ -208,17 +195,18 @@ with st.expander("🛠️ 點擊展開/收合 設定面板", expanded=not st.ses
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 執行按鈕 (全寬)
+    # 執行按鈕 (全寬度)
     def start_click():
         st.session_state.run_analysis = True
-        
-    run_btn = st.button("🚀 開始執行分析", on_click=start_click, use_container_width=True)
+    
+    st.button("🚀 開始執行分析", on_click=start_click, type="primary", use_container_width=True)
 
 
 # --- 數據處理函數 ---
 @st.cache_data(ttl=60)
 def load_data(ticker, start, end):
     try:
+        # auto_adjust=True 處理分割還原
         df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
@@ -245,29 +233,30 @@ if st.session_state.run_analysis:
         data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
         # ----------------------------------
-        # 最新行情 (手機版適合用 2x2 排列)
+        # 最新行情儀表板 (手機版優化: 2x2 排列)
         latest = data.iloc[-1]
         prev = data.iloc[-2] if len(data) > 1 else latest
-        latest_date_str = latest.name.strftime('%Y-%m-%d')
-        
-        st.markdown(f"#### 🎫 最新行情 ({latest_date_str})")
+        latest_date = latest.name.strftime('%Y-%m-%d')
         
         diff = latest['Close'] - prev['Close']
         diff_pct = (diff / prev['Close']) * 100
+
+        st.markdown(f"**🎫 最新行情: {latest_date}**")
         
-        # 使用 columns 讓 metrics 在手機上不會變成一條長龍
-        m_row1_1, m_row1_2 = st.columns(2)
-        with m_row1_1:
-            st.metric("目前股價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
-        with m_row1_2:
-            st.metric("最新成交量", f"{latest['Volume']:,.0f} 張")
+        # Row 1 of Metrics
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("收盤價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
+        with m2:
+            st.metric("成交量", f"{latest['Volume']:,.0f} 張")
             
-        m_row2_1, m_row2_2 = st.columns(2)
-        with m_row2_1:
+        # Row 2 of Metrics
+        m3, m4 = st.columns(2)
+        with m3:
             st.metric("布林上緣", f"{latest['BB_High']:.2f}")
-        with m_row2_2:
+        with m4:
             st.metric("布林下緣", f"{latest['BB_Low']:.2f}")
-        
+
         st.markdown("---")
         # ----------------------------------
 
@@ -284,18 +273,16 @@ if st.session_state.run_analysis:
             trigger_price = data["BB_High"] * (1 - tolerance_factor)
             condition_strategy = condition_vol & (data["Close"] >= trigger_price)
             signal_color = "red"
-            signal_name = f"爆量近上緣 (寬容度{bb_tolerance}%)"
+            signal_name = f"爆量近上緣({bb_tolerance}%)"
             marker_symbol = "triangle-down"
             signal_y_position = data['High'] * 1.005 
-
         elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
             trigger_price = data["BB_Low"] * (1 + tolerance_factor)
             condition_strategy = condition_vol & (data["Close"] <= trigger_price)
             signal_color = "green"
-            signal_name = f"爆量近下緣 (寬容度{bb_tolerance}%)"
+            signal_name = f"爆量近下緣({bb_tolerance}%)"
             marker_symbol = "triangle-up"
             signal_y_position = data['Low'] * 0.995 
-
         else:
             condition_strategy = condition_vol
             signal_color = "orange"
@@ -305,23 +292,21 @@ if st.session_state.run_analysis:
 
         signals = data[condition_strategy]
         
-        # 回測結果
-        st.markdown(f"#### 📊 策略分析: {bb_strategy}")
+        # 歷史回測結果 (手機版排版)
+        st.markdown(f"**📊 回測結果: {bb_strategy}**")
         
-        c1, c2, c3 = st.columns(3)
+        r1, r2, r3 = st.columns(3)
         if len(data) > 0:
             roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
-            c1.metric("區間漲跌幅", f"{roi:.2f}%")
-            c2.metric("符合天數", f"{len(signals)} 天")
-            c3.metric("最新通道寬", f"{data['BB_Width'].iloc[-1]:.2f}")
+            r1.metric("區間漲跌", f"{roi:.1f}%")
+            r2.metric("符合天數", f"{len(signals)}")
+            r3.metric("通道寬", f"{data['BB_Width'].iloc[-1]:.1f}")
 
         # 繪圖
         fig = go.Figure()
         fig.add_trace(go.Candlestick(
-            x=data.index,
-            open=data['Open'], high=data['High'],
-            low=data['Low'], close=data['Close'],
-            name='K線'
+            x=data.index, open=data['Open'], high=data['High'],
+            low=data['Low'], close=data['Close'], name='K線'
         ))
         fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='blue', width=1.5), name='20MA'))
         fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='上緣'))
@@ -336,31 +321,33 @@ if st.session_state.run_analysis:
             ))
 
         fig.update_layout(
-            title=f"走勢圖 (已還原權值)", 
+            title=f"股價走勢 ({ticker})", 
             xaxis_rangeslider_visible=False, 
-            height=500, # 手機版圖表高度稍微縮小一點方便瀏覽
-            margin=dict(l=10, r=10, t=40, b=10) # 減少邊界，利用手機螢幕寬度
+            height=500, # 手機高度適中
+            margin=dict(l=10, r=10, t=30, b=10), # 減少邊界，利用手機寬度
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) # 圖例放到上面
         )
         st.plotly_chart(fig, use_container_width=True)
 
         # 詳細數據
-        st.markdown("#### 🔎 詳細數據")
+        st.markdown("**🔎 詳細數據**")
         if not signals.empty:
             display_df = signals[['Close', 'Volume', 'Vol_MA20', 'BB_High', 'BB_Low', 'BB_Width']].copy()
             display_df['Volume_Ratio'] = display_df['Volume'] / display_df['Vol_MA20']
-
-            display_df.columns = ['收盤', '成交量', '月均量', '上緣', '下緣', '寬度', '量倍數'] # 縮短欄位名稱以適應手機
+            
+            # 手機版欄位名稱簡化
+            display_df.columns = ['收盤', '成交量', '月均量', '上緣', '下緣', '寬度', '量倍數']
             display_df.index.name = '日期'
 
             formatted_df = display_df.style.format({
                 '收盤': '{:.2f}', '成交量': '{:,.0f}', '月均量': '{:,.0f}',
-                '上緣': '{:.2f}', '下緣': '{:.2f}', '寬度': '{:.2f}', '量倍數': '{:.2f}倍'
+                '上緣': '{:.2f}', '下緣': '{:.2f}', '寬度': '{:.2f}', '量倍數': '{:.2f}'
             })
             
             st.dataframe(formatted_df, use_container_width=True)
         else:
-            st.warning("此區間無符合策略之交易日。")
+            st.warning("無符合條件交易日")
     else:
-        st.error(f"找不到代碼 {ticker} 或資料未更新。")
+        st.error(f"無法取得資料: {ticker} (請確認代碼或更新)")
 else:
-    st.info("👆 請點擊上方展開設定，並按下「🚀 開始執行分析」。")
+    st.info("👆 請點擊上方展開設定，並按下「🚀 開始執行分析」")
