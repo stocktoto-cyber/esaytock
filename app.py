@@ -1,292 +1,457 @@
 import streamlit as st
+
 import yfinance as yf
+
 import pandas as pd
+
 import plotly.graph_objects as go
+
 from datetime import datetime, timedelta, date
+
 import ta
 
-# --- 1. 頁面設定 ---
-st.set_page_config(
-    page_title="台股量價回測(色彩優化版)", 
-    page_icon="📈",
-    layout="centered", 
-    initial_sidebar_state="collapsed"
-)
 
-# 自訂 CSS：加大數據字體，並調整圖表邊距
-st.markdown("""
-    <style>
-    /* 加大指標數值的字體 */
-    .stMetricLabel {font-size: 15px !important; font-weight: bold !important;}
-    .stMetricValue {font-size: 24px !important;}
-    
-    /* 調整 Plotly 圖表在手機上的滿版效果 */
-    .stPlotlyChart {
-        margin-left: -10px; margin-right: -10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
-st.title("📈 台股量價回測 (色彩優化)")
+# --- 頁面設定 ---
+
+st.set_page_config(page_title="台股量價回測系統", layout="wide")
+
+st.title("📈 台股量價與布林通道回測工具")
+
+
 
 # --- 初始化 Session State ---
+
 if 'run_analysis' not in st.session_state:
+
     st.session_state.run_analysis = False
 
-# --- 2. 輸入區塊 ---
-col_input, col_btn = st.columns([2.5, 1])
-with col_input:
-    stock_input = st.text_input("股票代碼", value="00663L", label_visibility="collapsed", placeholder="輸入台股代碼")
 
-if stock_input and not stock_input.endswith('.TW') and not stock_input.endswith('.TWO'):
-    ticker = f"{stock_input}.TW"
+
+# --- 側邊欄：控制面板 ---
+
+st.sidebar.header("1. 股票與期間")
+
+stock_id = st.sidebar.text_input("輸入股票代碼", value="00663L")
+
+
+
+if stock_id and not stock_id.endswith('.TW') and not stock_id.endswith('.TWO'):
+
+    ticker = f"{stock_id}.TW"
+
 else:
-    ticker = stock_input
 
-# --- 3. 摺疊式設定選單 ---
-with st.expander("⚙️ 點此設定日期與策略參數", expanded=False):
-    st.caption("📅 日期設定")
-    period_option = st.selectbox(
-        "選擇回測區間",
-        ["近一年", "近三年", "近五年", "AI爆發期 (2023-至今)", "疫情期間 (2020-2022)", "自訂日期"]
-    )
+    ticker = stock_id
 
-    today = datetime.now().date()
-    tomorrow = today + timedelta(days=1) 
+
+
+# 【新增功能】強制更新按鈕
+
+if st.sidebar.button("🔄 強制更新今日資料"):
+
+    st.cache_data.clear()
+
+    st.session_state.run_analysis = True
+
+
+
+period_option = st.sidebar.selectbox(
+
+    "選擇回測區間",
+
+    ["近一年", "近三年", "近五年", "AI爆發期 (2023-至今)", "疫情期間 (2020-2022)", "美中貿易戰 (2018-2019)", "自訂日期"]
+
+)
+
+
+
+today = datetime.now().date()
+
+# 【關鍵修正】為了抓到「今天」的收盤價，yfinance 的 end 必須是「明天」
+
+# 因為 yfinance 的 end date 是 exclusive (不包含) 的
+
+tomorrow = today + timedelta(days=1) 
+
+
+
+start_date = today - timedelta(days=365)
+
+end_date = tomorrow # 預設結束日期改成明天
+
+
+
+if period_option == "近一年":
+
     start_date = today - timedelta(days=365)
-    end_date = tomorrow
 
-    if period_option == "近一年":
-        start_date = today - timedelta(days=365)
-    elif period_option == "近三年":
-        start_date = today - timedelta(days=365*3)
-    elif period_option == "近五年":
-        start_date = today - timedelta(days=365*5)
-    elif period_option == "AI爆發期 (2023-至今)":
-        start_date = date(2023, 1, 1)
-    elif period_option == "疫情期間 (2020-2022)":
-        start_date = date(2020, 1, 1)
-        end_date = date(2022, 12, 31)
-    elif period_option == "自訂日期":
-        c_d1, c_d2 = st.columns(2)
-        with c_d1:
-            start_date = st.date_input("開始", today - timedelta(days=365))
-        with c_d2:
-            user_end_date = st.date_input("結束", today)
-            if user_end_date == today:
-                end_date = tomorrow
-            else:
-                end_date = user_end_date
+elif period_option == "近三年":
 
-    st.markdown("---")
-    st.caption("📊 策略參數")
-    vol_multiplier = st.slider("爆量倍數 (vs 20MA)", 1.0, 3.0, 1.5, 0.1)
-    
-    bb_strategy = st.radio(
-        "訊號過濾條件",
-        ("不限 (僅看成交量)", "爆量 + 站上布林上緣", "爆量 + 跌破布林下緣")
-    )
-    
-    bb_tolerance = st.slider("訊號寬容度 (%)", 0.0, 10.0, 1.0, 0.1)
-    bb_window = 20
-    bb_std = 2
+    start_date = today - timedelta(days=365*3)
 
-    if st.button("🔄 清除快取並強制更新", use_container_width=True):
-        st.cache_data.clear()
-        st.session_state.run_analysis = True
+elif period_option == "近五年":
 
-# 執行按鈕
-with col_btn:
-    def start_click():
-        st.session_state.run_analysis = True
-    st.button("🚀 分析", on_click=start_click, type="primary", use_container_width=True)
+    start_date = today - timedelta(days=365*5)
+
+elif period_option == "AI爆發期 (2023-至今)":
+
+    start_date = date(2023, 1, 1)
+
+elif period_option == "疫情期間 (2020-2022)":
+
+    start_date = date(2020, 1, 1)
+
+    end_date = date(2022, 12, 31)
+
+elif period_option == "美中貿易戰 (2018-2019)":
+
+    start_date = date(2018, 1, 1)
+
+    end_date = date(2020, 1, 15)
+
+elif period_option == "自訂日期":
+
+    col_d1, col_d2 = st.sidebar.columns(2)
+
+    with col_d1:
+
+        start_date = st.date_input("開始日期", today - timedelta(days=365))
+
+    with col_d2:
+
+        # 這裡顯示給使用者看的是今天，但在傳給 yfinance 時我們需要微調
+
+        user_end_date = st.date_input("結束日期", today)
+
+        # 如果使用者選的是今天，我們程式內部偷偷加一天，確保抓得到今天
+
+        if user_end_date == today:
+
+            end_date = tomorrow
+
+        else:
+
+            end_date = user_end_date
+
+
+
+st.sidebar.header("2. 策略參數設定")
+
+vol_multiplier = st.sidebar.slider("成交量爆發倍數 (vs 20日均量)", 1.0, 3.0, 1.5, 0.1)
+
+
+
+st.sidebar.subheader("布林通道位置篩選")
+
+bb_strategy = st.sidebar.radio(
+
+    "選擇訊號過濾條件",
+
+    ("不限 (僅看成交量)", "爆量 + 站上布林上緣 (強勢)", "爆量 + 跌破布林下緣 (弱勢/反彈)")
+
+)
+
+
+
+bb_tolerance = st.sidebar.slider(
+
+    "訊號觸發寬容度 (%)", 
+
+    min_value=0.0, 
+
+    max_value=10.0, 
+
+    value=1.0, 
+
+    step=0.1, 
+
+    help="數值越大越寬鬆。例如設定 5%，代表股價只要接近上緣 5% 範圍內就會視為觸發。"
+
+)
+
+
+
+bb_window = 20
+
+bb_std = 2
+
+
+
+st.sidebar.markdown("---")
+
+def start_click():
+
+    st.session_state.run_analysis = True
+
+
+
+run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, type="primary")
+
 
 
 # --- 數據處理函數 ---
-@st.cache_data(ttl=60, show_spinner=False)
+
+# 【關鍵修正】加入 ttl=60，代表資料只會快取 60 秒，之後會強制重抓
+
+@st.cache_data(ttl=60)
+
 def load_data(ticker, start, end):
+
     try:
-        df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True, progress=False)
-        if df.empty: return None
+
+        # auto_adjust=True: 修正分割與股利
+
+        df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True)
+
+        
+
+        if df.empty:
+
+            return None
+
         if isinstance(df.columns, pd.MultiIndex):
-            if 'Close' in df.columns.get_level_values(1):
-                 df.columns = df.columns.droplevel(0)
-            elif 'Close' in df.columns.get_level_values(0):
-                 df.columns = df.columns.droplevel(1)
+
+            df.columns = df.columns.droplevel(1)
+
         return df
-    except Exception as e:
-        st.error(f"資料下載失敗: {e}")
+
+    except Exception:
+
         return None
 
+
+
 # --- 主程式邏輯 ---
+
 if st.session_state.run_analysis:
-    
-    with st.spinner(f"正在分析 {ticker}..."):
+
+    # 這裡的邏輯檢查需要小心，因為 end_date 已經被我們加了一天
+
+    # 只要 start_date 小於等於 user 選的日期即可
+
+    if start_date >= end_date:
+
+         # 簡單防呆，但因為 end_date 自動加了一天，通常不會觸發，除非選同一天
+
+         pass 
+
+
+
+    with st.spinner(f"正在分析 {ticker} (已啟用即時更新)..."):
+
         data = load_data(ticker, start_date, end_date)
+
+
+
+    if data is not None and not data.empty:
+
+        data['Volume'] = data['Volume'] / 1000
+
+
+
+        # 1. 計算技術指標
+
+        indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
+
+        data["BB_High"] = indicator_bb.bollinger_hband()
+
+        data["BB_Low"] = indicator_bb.bollinger_lband()
+
+        data["BB_Mid"] = indicator_bb.bollinger_mavg() 
+
+        data["BB_Width"] = data["BB_High"] - data["BB_Low"]
+
+        data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
+
+
+
+        # --- 顯示最新行情資訊 ---
+
+        # 取得最後一筆資料 (確認日期是否為今天)
+
+        latest = data.iloc[-1]
+
+        prev = data.iloc[-2] if len(data) > 1 else latest
+
         
-        if data is not None and not data.empty and 'Close' in data.columns:
-            data = data.copy()
-            data['Volume'] = data['Volume'] / 1000 
 
-            # 指標計算
-            indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
-            data["BB_High"] = indicator_bb.bollinger_hband()
-            data["BB_Low"] = indicator_bb.bollinger_lband()
-            data["BB_Mid"] = indicator_bb.bollinger_mavg() 
-            data["BB_Width"] = data["BB_High"] - data["BB_Low"]
-            data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
-        else:
-            st.error(f"無法取得 {ticker} 資料，請檢查代碼是否正確。")
-            st.stop()
+        # 格式化日期字串
 
-    # --- 4. 最新行情顯示 ---
-    latest = data.iloc[-1]
-    prev = data.iloc[-2] if len(data) > 1 else latest
-    
-    diff = latest['Close'] - prev['Close']
-    diff_pct = (diff / prev['Close']) * 100
-    
-    st.subheader(f"🎫 {ticker} 行情") 
-    st.caption(f"最新資料日期: {latest.name.strftime('%Y-%m-%d')}")
+        latest_date_str = latest.name.strftime('%Y-%m-%d')
 
-    m_col1, m_col2 = st.columns(2)
-    with m_col1:
-        st.metric("收盤價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
-        st.metric("布林上緣", f"{latest['BB_High']:.2f}")
-    with m_col2:
-        st.metric("成交量 (張)", f"{latest['Volume']:,.0f}")
-        st.metric("布林下緣", f"{latest['BB_Low']:.2f}")
+        
 
-    # --- 策略邏輯 ---
-    condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
-    tolerance_factor = bb_tolerance / 100.0
+        st.subheader(f"🎫 {ticker} 最新行情 ({latest_date_str})")
 
-    # 【色彩定義】台股標準：紅漲綠跌，且使用飽和色
-    COLOR_UP = "#FF0000"   # 飽和紅
-    COLOR_DOWN = "#00CC00" # 飽和綠 (太亮螢光綠會傷眼，用這個綠比較剛好)
-    COLOR_NEUTRAL = "orange"
+        
 
-    if bb_strategy == "爆量 + 站上布林上緣":
-        trigger_price = data["BB_High"] * (1 - tolerance_factor)
-        condition_strategy = condition_vol & (data["Close"] >= trigger_price)
-        signal_color = COLOR_UP  # 強勢用紅色
-        marker_symbol = "triangle-down"
-        signal_y_position = data['High'] * 1.01 
-        signal_name = "強勢訊號"
-    elif bb_strategy == "爆量 + 跌破布林下緣":
-        trigger_price = data["BB_Low"] * (1 + tolerance_factor)
-        condition_strategy = condition_vol & (data["Close"] <= trigger_price)
-        signal_color = COLOR_DOWN # 弱勢用綠色
-        marker_symbol = "triangle-up"
-        signal_y_position = data['Low'] * 0.99 
-        signal_name = "弱勢訊號"
-    else:
-        condition_strategy = condition_vol
-        signal_color = COLOR_NEUTRAL
-        marker_symbol = "triangle-down"
-        signal_y_position = data['High'] * 1.01
+        diff = latest['Close'] - prev['Close']
+
+        diff_pct = (diff / prev['Close']) * 100
+
+        
+
+        m1, m2, m3, m4 = st.columns(4)
+
+        m1.metric("目前股價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
+
+        m2.metric("最新成交量 (張)", f"{latest['Volume']:,.0f}")
+
+        m3.metric("布林上緣", f"{latest['BB_High']:.2f}")
+
+        m4.metric("布林下緣", f"{latest['BB_Low']:.2f}")
+
+        
+
+        st.markdown("---")
+
+
+
+        # 2. 篩選策略訊號
+
+        condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
+
+        
+
+        signal_color = "orange"
+
         signal_name = "爆量訊號"
 
-    signals = data[condition_strategy]
+        marker_symbol = "triangle-down"
 
-    # --- 5. 回測統計 ---
-    st.markdown("### 📊 回測績效") 
-    roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
-    
-    s1, s2, s3 = st.columns(3)
-    s1.metric("區間漲跌", f"{roi:.1f}%")
-    s2.metric("觸發次數", f"{len(signals)}")
-    s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.2f}")
+        signal_y_position = data['High'] * 1.005 
 
-    # --- 6. 圖表優化 (CSS與色彩修正) ---
-    fig = go.Figure()
+        
 
-    # K線 (使用台股紅綠配色)
-    fig.add_trace(go.Candlestick(
-        x=data.index,
-        open=data['Open'], high=data['High'],
-        low=data['Low'], close=data['Close'],
-        name='K線', visible=True,
-        # 設定飽和的紅綠色
-        increasing_line_color=COLOR_UP, 
-        decreasing_line_color=COLOR_DOWN
-    ))
+        tolerance_factor = bb_tolerance / 100.0
 
-    # 布林帶
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='rgba(200,200,200,0.5)', width=1), name='BB Upper', legendgroup="BB"))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='rgba(200,200,200,0.5)', width=1), name='BB Lower', fill='tonexty', fillcolor='rgba(255,255,255,0.05)', legendgroup="BB"))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Mid'], line=dict(color='#2979FF', width=1.5), name='MA20', legendgroup="BB"))
 
-    # 訊號
-    if not signals.empty:
-        plot_y = signal_y_position[signals.index]
-        fig.add_trace(go.Scatter(
-            x=signals.index, y=plot_y,
-            mode='markers',
-            # 訊號顏色跟隨上方定義 (飽和紅/綠)
-            marker=dict(symbol=marker_symbol, size=12, color=signal_color, line=dict(width=1, color='white')),
-            name=signal_name
+
+        if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
+
+            trigger_price = data["BB_High"] * (1 - tolerance_factor)
+
+            condition_strategy = condition_vol & (data["Close"] >= trigger_price)
+
+            signal_color = "red"
+
+            signal_name = f"爆量近上緣 (寬容度{bb_tolerance}%)"
+
+            marker_symbol = "triangle-down"
+
+            signal_y_position = data['High'] * 1.005 
+
+
+
+        elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
+
+            trigger_price = data["BB_Low"] * (1 + tolerance_factor)
+
+            condition_strategy = condition_vol & (data["Close"] <= trigger_price)
+
+            signal_color = "green"
+
+            signal_name = f"爆量近下緣 (寬容度{bb_tolerance}%)"
+
+            marker_symbol = "triangle-up"
+
+            signal_y_position = data['Low'] * 0.995 
+
+
+
+        else:
+
+            condition_strategy = condition_vol
+
+            signal_color = "orange"
+
+            signal_name = "爆量訊號"
+
+            marker_symbol = "triangle-down"
+
+            signal_y_position = data['High'] * 1.005
+
+
+
+        signals = data[condition_strategy]
+
+        
+
+        # --- 顯示回測結果 ---
+
+        st.subheader(f"📊 歷史回測結果 | 策略: {bb_strategy}")
+
+        
+
+        col1, col2, col3 = st.columns(3)
+
+        if len(data) > 0:
+
+            roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
+
+            col1.metric("區間漲跌幅", f"{roi:.2f}%")
+
+            col2.metric("符合策略天數", f"{len(signals)} 天")
+
+            col3.metric("最新布林寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
+
+
+
+        # --- 繪圖 ---
+
+        fig = go.Figure()
+
+
+
+        # K線
+
+        fig.add_trace(go.Candlestick(
+
+            x=data.index,
+
+            open=data['Open'], high=data['High'],
+
+            low=data['Low'], close=data['Close'],
+
+            name='K線'
+
         ))
 
-    fig.update_layout(
-        title="股價走勢圖 (單指平移/雙指縮放)",
-        title_font_size=16,
-        height=550,
-        margin=dict(l=10, r=10, t=60, b=20),
-        
-        # 圖例樣式
-        legend=dict(
-            orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
-            bgcolor="rgba(0,0,0,0.7)", 
-            bordercolor="white",
-            borderwidth=1,
-            font=dict(size=12, color="white")
-        ),
-        
-        xaxis=dict(
-            rangeslider=dict(visible=True, thickness=0.12),
-            type="date",
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1月", step="month", stepmode="backward"),
-                    dict(count=3, label="3月", step="month", stepmode="backward"),
-                    dict(count=6, label="半年", step="month", stepmode="backward"),
-                    dict(step="all", label="全部")
-                ]),
-                x=0, y=1.01, xanchor='left', yanchor='bottom',
-                font=dict(size=11),
-                bgcolor="rgba(240,240,240,0.8)"
-            )
-        ),
-        yaxis=dict(
-            autorange=True,
-            fixedrange=False,
-            side="right"
-        ),
-        dragmode='pan',
-        hovermode='x unified',
-        
-        # 資訊框樣式 (高對比度)
-        hoverlabel=dict(
-            bgcolor="white",          
-            font_size=14,             
-            font_color="black",       
-            font_family="Roboto, Arial",
-            bordercolor="#333333"     
-        )
-    )
 
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': True})
 
-    # --- 7. 詳細數據 ---
-    with st.expander("🔎 查看詳細訊號表格"):
+        # 月線 (20MA)
+
+        fig.add_trace(go.Scatter(
+
+            x=data.index, 
+
+            y=data['BB_Mid'], 
+
+            line=dict(color='blue', width=1.5), 
+
+            name='月線 (20MA)'
+
+        ))
+
+
+
+        # 布林通道
+
+        fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
+
+        fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
+
+
+
+        # 標記訊號
+
         if not signals.empty:
-            display_df = signals[['Close', 'Volume', 'BB_High', 'BB_Low']].copy()
-            display_df.columns = ['收盤', '量(張)', 'BB上', 'BB下']
-            display_df.index = display_df.index.strftime('%Y-%m-%d')
-            st.dataframe(display_df.style.format("{:,.0f}", subset=['量(張)']).format("{:.2f}", subset=['收盤', 'BB上', 'BB下']))
-        else:
-            st.info("此區間內無觸發訊號")
 
-else:
-    st.info("👆 請在上方輸入代碼並點擊「🚀 分析」")
+            plot_y = signal_y_position[signals.index]
+
+            fig.add_trace(go.Scatter(
+
+                x=signals.index, 
+
+                y=plot_y,
