@@ -7,7 +7,7 @@ import ta
 
 # --- 1. 頁面設定 ---
 st.set_page_config(
-    page_title="台股量價回測(觸控優化)", 
+    page_title="台股量價回測(色彩優化版)", 
     page_icon="📈",
     layout="centered", 
     initial_sidebar_state="collapsed"
@@ -27,7 +27,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📈 台股量價回測 (觸控版)")
+st.title("📈 台股量價回測 (色彩優化)")
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
@@ -146,7 +146,6 @@ if st.session_state.run_analysis:
     diff = latest['Close'] - prev['Close']
     diff_pct = (diff / prev['Close']) * 100
     
-    # 修正：移除 anchor=False
     st.subheader(f"🎫 {ticker} 行情") 
     st.caption(f"最新資料日期: {latest.name.strftime('%Y-%m-%d')}")
 
@@ -162,28 +161,35 @@ if st.session_state.run_analysis:
     condition_vol = data["Volume"] > (data["Vol_MA20"] * vol_multiplier)
     tolerance_factor = bb_tolerance / 100.0
 
+    # 【色彩定義】台股標準：紅漲綠跌，且使用飽和色
+    COLOR_UP = "#FF0000"   # 飽和紅
+    COLOR_DOWN = "#00CC00" # 飽和綠 (太亮螢光綠會傷眼，用這個綠比較剛好)
+    COLOR_NEUTRAL = "orange"
+
     if bb_strategy == "爆量 + 站上布林上緣":
         trigger_price = data["BB_High"] * (1 - tolerance_factor)
         condition_strategy = condition_vol & (data["Close"] >= trigger_price)
-        signal_color, marker_symbol = "red", "triangle-down"
+        signal_color = COLOR_UP  # 強勢用紅色
+        marker_symbol = "triangle-down"
         signal_y_position = data['High'] * 1.01 
         signal_name = "強勢訊號"
     elif bb_strategy == "爆量 + 跌破布林下緣":
         trigger_price = data["BB_Low"] * (1 + tolerance_factor)
         condition_strategy = condition_vol & (data["Close"] <= trigger_price)
-        signal_color, marker_symbol = "green", "triangle-up"
+        signal_color = COLOR_DOWN # 弱勢用綠色
+        marker_symbol = "triangle-up"
         signal_y_position = data['Low'] * 0.99 
         signal_name = "弱勢訊號"
     else:
         condition_strategy = condition_vol
-        signal_color, marker_symbol = "orange", "triangle-down"
+        signal_color = COLOR_NEUTRAL
+        marker_symbol = "triangle-down"
         signal_y_position = data['High'] * 1.01
         signal_name = "爆量訊號"
 
     signals = data[condition_strategy]
 
     # --- 5. 回測統計 ---
-    # 修正：移除 anchor=False
     st.markdown("### 📊 回測績效") 
     roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
     
@@ -192,15 +198,18 @@ if st.session_state.run_analysis:
     s2.metric("觸發次數", f"{len(signals)}")
     s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.2f}")
 
-    # --- 6. 圖表優化 (CSS與樣式修正重點) ---
+    # --- 6. 圖表優化 (CSS與色彩修正) ---
     fig = go.Figure()
 
-    # K線
+    # K線 (使用台股紅綠配色)
     fig.add_trace(go.Candlestick(
         x=data.index,
         open=data['Open'], high=data['High'],
         low=data['Low'], close=data['Close'],
-        name='K線', visible=True
+        name='K線', visible=True,
+        # 設定飽和的紅綠色
+        increasing_line_color=COLOR_UP, 
+        decreasing_line_color=COLOR_DOWN
     ))
 
     # 布林帶
@@ -214,6 +223,7 @@ if st.session_state.run_analysis:
         fig.add_trace(go.Scatter(
             x=signals.index, y=plot_y,
             mode='markers',
+            # 訊號顏色跟隨上方定義 (飽和紅/綠)
             marker=dict(symbol=marker_symbol, size=12, color=signal_color, line=dict(width=1, color='white')),
             name=signal_name
         ))
@@ -224,7 +234,7 @@ if st.session_state.run_analysis:
         height=550,
         margin=dict(l=10, r=10, t=60, b=20),
         
-        # 【修正 1】優化圖例樣式：深色半透明背景，白色邊框，避免看不清
+        # 圖例樣式
         legend=dict(
             orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
             bgcolor="rgba(0,0,0,0.7)", 
@@ -256,13 +266,13 @@ if st.session_state.run_analysis:
         dragmode='pan',
         hovermode='x unified',
         
-        # 【修正 2】優化資訊框 (Tooltip) 樣式：高對比色 (白底黑字)
+        # 資訊框樣式 (高對比度)
         hoverlabel=dict(
-            bgcolor="white",          # 純白背景
-            font_size=14,             # 加大字體
-            font_color="black",       # 強制黑色字體
+            bgcolor="white",          
+            font_size=14,             
+            font_color="black",       
             font_family="Roboto, Arial",
-            bordercolor="#333333"     # 深色邊框
+            bordercolor="#333333"     
         )
     )
 
