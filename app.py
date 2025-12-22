@@ -7,7 +7,87 @@ import ta
 
 # --- 頁面設定 ---
 st.set_page_config(page_title="台股量價回測系統", layout="wide")
-st.title("📈 台股量價與布林通道回測工具")
+
+# --- 【關鍵修改】注入 iOS 風格 CSS ---
+st.markdown("""
+<style>
+    /* 全域字體設定：使用 Apple 系統字體 */
+    html, body, [class*="css"] {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    }
+
+    /* 背景顏色：iOS 淺灰色背景 */
+    .stApp {
+        background-color: #F2F2F7;
+    }
+
+    /* 側邊欄：純白背景 + 輕微邊框 */
+    section[data-testid="stSidebar"] {
+        background-color: #FFFFFF;
+        border-right: 1px solid #E5E5EA;
+    }
+
+    /* 標題樣式 */
+    h1, h2, h3 {
+        color: #1C1C1E;
+        font-weight: 700 !important;
+    }
+
+    /* 卡片化指標 (Metric)：白色背景 + 圓角 + 陰影 */
+    [data-testid="stMetric"] {
+        background-color: #FFFFFF;
+        padding: 15px 20px;
+        border-radius: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border: 1px solid #E5E5EA;
+        text-align: center;
+    }
+    
+    /* 指標數值顏色 */
+    [data-testid="stMetricValue"] {
+        font-weight: 600;
+        font-size: 24px;
+    }
+
+    /* 按鈕樣式：iOS 藍色按鈕 + 圓角 */
+    .stButton button {
+        background-color: #007AFF !important;
+        color: white !important;
+        border-radius: 14px !important;
+        border: none !important;
+        padding: 10px 24px !important;
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        box-shadow: 0 4px 6px rgba(0, 122, 255, 0.2);
+        transition: all 0.2s ease;
+    }
+    
+    .stButton button:hover {
+        background-color: #0062CC !important;
+        transform: scale(1.02);
+    }
+    
+    .stButton button:active {
+        transform: scale(0.98);
+    }
+
+    /* 輸入框與選單：圓角化 */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
+        border-radius: 10px !important;
+        border: 1px solid #D1D1D6 !important;
+        background-color: #FFFFFF !important;
+    }
+
+    /* 表格樣式優化 */
+    .dataframe {
+        font-family: -apple-system, sans-serif;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("📈 台股量價分析")
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
@@ -68,7 +148,8 @@ st.sidebar.markdown("---")
 def start_click():
     st.session_state.run_analysis = True
 
-run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, type="primary")
+# 按鈕會套用 CSS 中的 iOS 藍色樣式
+run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click)
 
 # --- 數據處理函數 ---
 @st.cache_data
@@ -95,7 +176,6 @@ if st.session_state.run_analysis:
             data['Volume'] = data['Volume'] / 1000
 
             # 1. 計算技術指標
-            # BB_Mid 其實就是 20MA (月線)
             indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
             data["BB_High"] = indicator_bb.bollinger_hband()
             data["BB_Low"] = indicator_bb.bollinger_lband()
@@ -109,33 +189,34 @@ if st.session_state.run_analysis:
             signal_color = "orange"
             signal_name = "爆量訊號"
             marker_symbol = "triangle-down"
-            signal_y_position = data['High'] * 1.005 # 預設位置
+            signal_y_position = data['High'] * 1.005 
             
             if bb_strategy == "爆量 + 站上布林上緣 (強勢)":
                 condition_strategy = condition_vol & (data["Close"] >= data["BB_High"])
-                signal_color = "red"
+                signal_color = "#FF3B30" # iOS System Red
                 signal_name = "爆量突破上緣"
                 marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005 
 
             elif bb_strategy == "爆量 + 跌破布林下緣 (弱勢/反彈)":
                 condition_strategy = condition_vol & (data["Close"] <= data["BB_Low"])
-                signal_color = "green"
+                signal_color = "#34C759" # iOS System Green
                 signal_name = "爆量跌破下緣"
                 marker_symbol = "triangle-up"
                 signal_y_position = data['Low'] * 0.995 
 
             else:
                 condition_strategy = condition_vol
-                signal_color = "orange"
+                signal_color = "#FF9500" # iOS System Orange
                 signal_name = "爆量訊號"
                 marker_symbol = "triangle-down"
                 signal_y_position = data['High'] * 1.005
 
             signals = data[condition_strategy]
             
-            # --- 顯示結果 ---
+            # --- 顯示結果 (卡片式 Metrics) ---
             st.subheader(f"📊 {ticker} 分析結果 | 策略: {bb_strategy}")
+            st.markdown("<br>", unsafe_allow_html=True) # 增加一點留白
             
             col1, col2, col3 = st.columns(3)
             if len(data) > 0:
@@ -143,6 +224,8 @@ if st.session_state.run_analysis:
                 col1.metric("區間漲跌幅", f"{roi:.2f}%")
                 col2.metric("符合策略天數", f"{len(signals)} 天")
                 col3.metric("最新布林寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # --- 繪圖 ---
             fig = go.Figure()
@@ -155,15 +238,15 @@ if st.session_state.run_analysis:
                 name='K線'
             ))
 
-            # 【新增】月線 (20MA) - 使用藍色實線
+            # 月線 (20MA) - 使用 iOS 藍色
             fig.add_trace(go.Scatter(
                 x=data.index, 
                 y=data['BB_Mid'], 
-                line=dict(color='blue', width=1.5), 
+                line=dict(color='#007AFF', width=1.5), 
                 name='月線 (20MA)'
             ))
 
-            # 布林通道 (上緣/下緣)
+            # 布林通道
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
             fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
 
@@ -179,9 +262,13 @@ if st.session_state.run_analysis:
                 ))
 
             fig.update_layout(
-                title=f"股價走勢圖 (藍線為月線)", 
+                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(size=20, color="black")),
                 xaxis_rangeslider_visible=False, 
-                height=600
+                height=600,
+                paper_bgcolor='#F2F2F7', # 圖表背景跟隨 APP 背景
+                plot_bgcolor='white',    # 繪圖區塊保留白色
+                margin=dict(l=20, r=20, t=50, b=20),
+                font=dict(family="-apple-system, BlinkMacSystemFont, sans-serif")
             )
             st.plotly_chart(fig, use_container_width=True)
 
