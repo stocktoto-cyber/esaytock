@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta, date
 import ta
 
-# --- 1. 頁面設定 (改為 Centered 適合手機直向瀏覽) ---
+# --- 1. 頁面設定 ---
 st.set_page_config(
     page_title="台股量價回測(手機觸控版)", 
     page_icon="📈",
@@ -13,12 +13,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 自訂 CSS 以優化手機版間距與字體
+# 自訂 CSS 以優化手機版間距
 st.markdown("""
     <style>
     .stMetricLabel {font-size: 14px !important;}
     .stMetricValue {font-size: 20px !important;}
-    /* 調整 Plotly 圖表容器在手機上的邊距 */
     .stPlotlyChart {
         margin-left: -10px; margin-right: -10px;
     }
@@ -31,10 +30,10 @@ st.title("📈 台股量價回測 (觸控優化)")
 if 'run_analysis' not in st.session_state:
     st.session_state.run_analysis = False
 
-# --- 2. 輸入區塊優化 ---
+# --- 2. 輸入區塊 ---
 col_input, col_btn = st.columns([2.5, 1])
 with col_input:
-    stock_input = st.text_input("股票代碼", value="00663L", label_visibility="collapsed", placeholder="輸入台股代碼 (如 2330)")
+    stock_input = st.text_input("股票代碼", value="00663L", label_visibility="collapsed", placeholder="輸入台股代碼")
 
 if stock_input and not stock_input.endswith('.TW') and not stock_input.endswith('.TWO'):
     ticker = f"{stock_input}.TW"
@@ -107,15 +106,11 @@ def load_data(ticker, start, end):
     try:
         df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True, progress=False)
         if df.empty: return None
-        # 處理 MultiIndex (yfinance 新版可能的行為)
         if isinstance(df.columns, pd.MultiIndex):
-             # 如果第二層 level 有 'Close', 'Open' 等字樣，就 drop 掉第一層的 ticker 名稱
             if 'Close' in df.columns.get_level_values(1):
                  df.columns = df.columns.droplevel(0)
-            # 否則如果第一層有這些字樣，就 drop 掉第二層 (視 yfinance 版本而定，較少見)
             elif 'Close' in df.columns.get_level_values(0):
                  df.columns = df.columns.droplevel(1)
-            
         return df
     except Exception as e:
         st.error(f"資料下載失敗: {e}")
@@ -128,9 +123,8 @@ if st.session_state.run_analysis:
         data = load_data(ticker, start_date, end_date)
         
         if data is not None and not data.empty and 'Close' in data.columns:
-            # 資料處理
-            data = data.copy() # 避免 SettingWithCopyWarning
-            data['Volume'] = data['Volume'] / 1000 # 換算成張數
+            data = data.copy()
+            data['Volume'] = data['Volume'] / 1000 
 
             # 指標計算
             indicator_bb = ta.volatility.BollingerBands(close=data["Close"], window=bb_window, window_dev=bb_std)
@@ -139,19 +133,19 @@ if st.session_state.run_analysis:
             data["BB_Mid"] = indicator_bb.bollinger_mavg() 
             data["BB_Width"] = data["BB_High"] - data["BB_Low"]
             data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
-
         else:
             st.error(f"無法取得 {ticker} 資料，請檢查代碼是否正確。")
             st.stop()
 
-    # --- 4. 最新行情顯示 (2x2 排版) ---
+    # --- 4. 最新行情顯示 ---
     latest = data.iloc[-1]
     prev = data.iloc[-2] if len(data) > 1 else latest
     
     diff = latest['Close'] - prev['Close']
     diff_pct = (diff / prev['Close']) * 100
     
-    st.subheader(f"🎫 {ticker} 行情", anchor=False)
+    # 【修正點】移除 anchor=False 以相容舊版 Streamlit
+    st.subheader(f"🎫 {ticker} 行情") 
     st.caption(f"最新資料日期: {latest.name.strftime('%Y-%m-%d')}")
 
     m_col1, m_col2 = st.columns(2)
@@ -186,8 +180,9 @@ if st.session_state.run_analysis:
 
     signals = data[condition_strategy]
 
-    # --- 5. 回測統計 (3欄緊湊版) ---
-    st.markdown("### 📊 回測績效", anchor=False)
+    # --- 5. 回測統計 ---
+    # 【修正點】移除 anchor=False 以相容舊版 Streamlit
+    st.markdown("### 📊 回測績效") 
     roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
     
     s1, s2, s3 = st.columns(3)
@@ -195,7 +190,7 @@ if st.session_state.run_analysis:
     s2.metric("觸發次數", f"{len(signals)}")
     s3.metric("目前頻寬", f"{data['BB_Width'].iloc[-1]:.2f}")
 
-    # --- 6. 圖表優化 (針對手機觸控深度優化) ---
+    # --- 6. 圖表優化 (含手機觸控功能) ---
     fig = go.Figure()
 
     # K線
@@ -221,25 +216,19 @@ if st.session_state.run_analysis:
             name=signal_name
         ))
 
-    # 手機版圖表 Layout 設定 (關鍵修改)
     fig.update_layout(
         title="股價走勢圖 (單指平移/雙指縮放)",
         title_font_size=16,
-        height=550, # 稍微再高一點，容納下方滑桿
-        margin=dict(l=10, r=10, t=60, b=20), # 增加頂部邊距給按鈕和圖例
+        height=550,
+        margin=dict(l=10, r=10, t=60, b=20),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
-            bgcolor="rgba(255,255,255,0.6)", # 半透明背景
+            bgcolor="rgba(255,255,255,0.6)",
             font=dict(size=11)
         ),
-        # 【重點1】啟用下方滑動條 (Range Slider) - 手機救星
         xaxis=dict(
-            rangeslider=dict(
-                visible=True,
-                thickness=0.12 # 設定滑桿高度比例
-            ),
+            rangeslider=dict(visible=True, thickness=0.12),
             type="date",
-            # 【重點2】新增快速時間按鈕 (Range Selector)
             rangeselector=dict(
                 buttons=list([
                     dict(count=1, label="1月", step="month", stepmode="backward"),
@@ -247,28 +236,21 @@ if st.session_state.run_analysis:
                     dict(count=6, label="半年", step="month", stepmode="backward"),
                     dict(step="all", label="全部")
                 ]),
-                x=0, y=1.01, xanchor='left', yanchor='bottom', # 按鈕位置設定在左上角
+                x=0, y=1.01, xanchor='left', yanchor='bottom',
                 font=dict(size=11),
                 bgcolor="rgba(240,240,240,0.8)"
             )
         ),
-        # 【重點3】Y軸設定：確保拖曳時自動縮放 (Auto-scale)
         yaxis=dict(
-            autorange=True, # 確保Y軸隨X軸範圍自動調整
-            fixedrange=False, # 允許Y軸被縮放(雖然我們主要操作X軸)
-            side="right" # 將 Y軸刻度移到右側，比較符合手機閱讀習慣
+            autorange=True,
+            fixedrange=False,
+            side="right"
         ),
-        dragmode='pan', # 預設單指操作為平移
-        hovermode='x unified', # 統一顯示資訊框，手指點擊時比較清楚
-        hoverlabel=dict(
-            bgcolor="rgba(255,255,255,0.9)",
-            font_size=12
-        )
+        dragmode='pan',
+        hovermode='x unified',
+        hoverlabel=dict(bgcolor="rgba(255,255,255,0.9)", font_size=12)
     )
 
-    # 【重點4】Config 設定：優化觸控行為
-    # scrollZoom=True 在手機上對應更順暢的雙指縮放
-    # displayModeBar=False 隱藏礙事的小工具列
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': True})
 
     # --- 7. 詳細數據 ---
