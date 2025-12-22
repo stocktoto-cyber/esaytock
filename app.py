@@ -8,16 +8,13 @@ import ta
 # --- 頁面設定 ---
 st.set_page_config(page_title="台股量價分析 (Neumorphism)", layout="wide")
 
-# --- 【關鍵修改】擬物化 CSS (修復下拉選單文字顏色) ---
+# --- 【關鍵修改】強力 CSS 注入 (全亮色高對比方案) ---
 st.markdown("""
 <style>
     /* --- 1. 全域變數 --- */
     :root {
         --bg-color: #EBECF0;        /* 淺灰藍背景 */
-        --text-main: #2d3436;       /* 深黑灰文字 (比之前更深，確保清晰) */
-        --text-sub: #636e72;        /* 次要文字 */
-        --accent-orange: #e17055;   /* 亮橘 */
-        --accent-blue: #0984e3;     /* 亮藍 */
+        --text-color: #000000;      /* 純黑文字 (最安全) */
         --shadow-light: #FFFFFF;    
         --shadow-dark: #b2bec3;     
     }
@@ -25,7 +22,7 @@ st.markdown("""
     .stApp {
         background-color: var(--bg-color);
         font-family: 'Segoe UI', sans-serif;
-        color: var(--text-main);
+        color: var(--text-color);
     }
 
     /* 側邊欄背景 */
@@ -34,40 +31,42 @@ st.markdown("""
         box-shadow: inset -5px 0 10px var(--shadow-dark);
     }
 
-    /* 全域文字顏色 (標題、標籤) */
-    h1, h2, h3, p, label, span, div {
-        color: var(--text-main);
+    /* 強制所有基本文字為黑色 */
+    h1, h2, h3, p, label, span, div, li {
+        color: var(--text-color);
     }
 
-    /* --- 【修正重點】下拉選單與輸入框文字顏色 --- */
+    /* --- 【修正核心】下拉選單 (Selectbox) --- */
     
-    /* 1. 針對「顯示在框框內」的已選擇文字 -> 強制黑色 */
-    .stSelectbox div[data-baseweb="select"] div {
-        color: #000000 !important; /* 強制黑色 */
+    /* 1. 修正「選單容器 (Popover)」背景 -> 強制白色 */
+    div[data-baseweb="popover"],
+    ul[data-baseweb="menu"] {
+        background-color: #FFFFFF !important;
     }
-    
-    /* 2. 針對「輸入框」內的文字 -> 強制黑色 */
-    .stTextInput input, .stDateInput input {
+
+    /* 2. 修正「選單內的所有選項」文字 -> 強制黑色 */
+    ul[data-baseweb="menu"] li div,
+    ul[data-baseweb="menu"] li span {
         color: #000000 !important;
     }
 
-    /* 3. 針對「彈出的選單 (Popover/Menu)」 -> 維持深底白字 */
-    ul[data-baseweb="menu"] {
-        background-color: #2d3436 !important; /* 深色背景 */
+    /* 3. 修正「已選擇的項目 (顯示在框框內)」文字 -> 強制黑色 */
+    div[data-baseweb="select"] div {
+        color: #000000 !important;
     }
-    ul[data-baseweb="menu"] li span, 
-    ul[data-baseweb="menu"] li div {
-        color: #FFFFFF !important; /* 選項文字白色 */
+    
+    /* 4. 修正「輸入框」文字 -> 強制黑色 */
+    input {
+        color: #000000 !important;
     }
 
     /* --- 2. 擬物化元件樣式 --- */
     
-    /* 輸入框外觀 (凹陷效果) */
+    /* 輸入框與選單外框 (凹陷效果) */
     .stTextInput input, .stDateInput input, div[data-baseweb="select"] > div {
         background-color: var(--bg-color) !important;
         border: none !important;
         border-radius: 12px !important;
-        /* 內陰影 = 凹陷感 */
         box-shadow: inset 4px 4px 8px var(--shadow-dark), 
                     inset -4px -4px 8px var(--shadow-light) !important;
         padding: 10px 15px !important;
@@ -81,8 +80,10 @@ st.markdown("""
         box-shadow: 8px 8px 16px var(--shadow-dark), 
                    -8px -8px 16px var(--shadow-light);
     }
+    
+    /* 數據顏色 (藍色) */
     div[data-testid="stMetricValue"] > div {
-        color: var(--accent-blue) !important;
+        color: #0984e3 !important;
         font-weight: 700;
         font-size: 28px !important;
     }
@@ -90,7 +91,7 @@ st.markdown("""
     /* 按鈕 (亮橘色浮出) */
     .stButton button {
         background: linear-gradient(145deg, #ffab57, #e68f3c) !important;
-        color: white !important;
+        color: white !important; /* 按鈕文字維持白色 */
         border: none !important;
         border-radius: 30px !important;
         box-shadow: 5px 5px 10px #cc7f36, -5px -5px 10px #ffbf60 !important;
@@ -98,16 +99,6 @@ st.markdown("""
     }
     .stButton button:active {
         box-shadow: inset 3px 3px 6px #cc7f36, inset -3px -3px 6px #ffbf60 !important;
-    }
-
-    /* Radio Group */
-    div[role="radiogroup"] label {
-        background-color: var(--bg-color);
-        padding: 8px 16px;
-        border-radius: 10px;
-        margin-bottom: 8px;
-        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
-        border: 1px solid rgba(255,255,255,0.2);
     }
     
     /* 表格與圖表容器 */
@@ -284,13 +275,13 @@ if st.session_state.run_analysis:
                 ))
 
             fig.update_layout(
-                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="#2d3436", size=20)),
+                title=dict(text=f"股價走勢圖 ({signal_name})", font=dict(color="#000000", size=20)),
                 xaxis_rangeslider_visible=False, 
                 height=600,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=20, r=20, t=50, b=20),
-                font=dict(family="Segoe UI, sans-serif", color="#2d3436"),
+                font=dict(family="Segoe UI, sans-serif", color="#000000"),
                 xaxis=dict(showgrid=True, gridcolor='#dfe6e9'),
                 yaxis=dict(showgrid=True, gridcolor='#dfe6e9')
             )
