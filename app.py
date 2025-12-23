@@ -34,7 +34,6 @@ period_option = st.sidebar.selectbox(
 
 today = datetime.now().date()
 # 【關鍵修正】為了抓到「今天」的收盤價，yfinance 的 end 必須是「明天」
-# 因為 yfinance 的 end date 是 exclusive (不包含) 的
 tomorrow = today + timedelta(days=1) 
 
 start_date = today - timedelta(days=365)
@@ -59,9 +58,7 @@ elif period_option == "自訂日期":
     with col_d1:
         start_date = st.date_input("開始日期", today - timedelta(days=365))
     with col_d2:
-        # 這裡顯示給使用者看的是今天，但在傳給 yfinance 時我們需要微調
         user_end_date = st.date_input("結束日期", today)
-        # 如果使用者選的是今天，我們程式內部偷偷加一天，確保抓得到今天
         if user_end_date == today:
             end_date = tomorrow
         else:
@@ -95,11 +92,9 @@ def start_click():
 run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, type="primary")
 
 # --- 數據處理函數 ---
-# 【關鍵修正】加入 ttl=60，代表資料只會快取 60 秒，之後會強制重抓
 @st.cache_data(ttl=60)
 def load_data(ticker, start, end):
     try:
-        # auto_adjust=True: 修正分割與股利
         df = yf.download(ticker, start=str(start), end=str(end), auto_adjust=True)
         
         if df.empty:
@@ -112,10 +107,7 @@ def load_data(ticker, start, end):
 
 # --- 主程式邏輯 ---
 if st.session_state.run_analysis:
-    # 這裡的邏輯檢查需要小心，因為 end_date 已經被我們加了一天
-    # 只要 start_date 小於等於 user 選的日期即可
     if start_date >= end_date:
-         # 簡單防呆，但因為 end_date 自動加了一天，通常不會觸發，除非選同一天
          pass 
 
     with st.spinner(f"正在分析 {ticker} (已啟用即時更新)..."):
@@ -133,11 +125,9 @@ if st.session_state.run_analysis:
         data["Vol_MA20"] = data["Volume"].rolling(window=20).mean()
 
         # --- 顯示最新行情資訊 ---
-        # 取得最後一筆資料 (確認日期是否為今天)
         latest = data.iloc[-1]
         prev = data.iloc[-2] if len(data) > 1 else latest
         
-        # 格式化日期字串
         latest_date_str = latest.name.strftime('%Y-%m-%d')
         
         st.subheader(f"🎫 {ticker} 最新行情 ({latest_date_str})")
@@ -188,15 +178,24 @@ if st.session_state.run_analysis:
 
         signals = data[condition_strategy]
         
-        # --- 顯示回測結果 ---
+        # --- 顯示回測結果 (新增平均價格功能) ---
         st.subheader(f"📊 歷史回測結果 | 策略: {bb_strategy}")
         
-        col1, col2, col3 = st.columns(3)
+        # 修改這裡：原本是 columns(3)，改為 columns(4)
+        col1, col2, col3, col4 = st.columns(4)
+        
         if len(data) > 0:
             roi = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0] * 100)
             col1.metric("區間漲跌幅", f"{roi:.2f}%")
             col2.metric("符合策略天數", f"{len(signals)} 天")
             col3.metric("最新布林寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
+            
+            # 【新增】計算訊號點的平均收盤價
+            if not signals.empty:
+                avg_signal_price = signals['Close'].mean()
+                col4.metric("訊號平均價格", f"{avg_signal_price:.2f}")
+            else:
+                col4.metric("訊號平均價格", "無訊號")
 
         # --- 繪圖 ---
         fig = go.Figure()
@@ -231,6 +230,9 @@ if st.session_state.run_analysis:
                 marker=dict(symbol=marker_symbol, size=12, color=signal_color),
                 name=signal_name
             ))
+            
+            # (選用) 如果你想在圖表上畫出一條平均價格的虛線，可以把下面這段註解打開
+            # fig.add_hline(y=avg_signal_price, line_dash="dash", line_color="purple", annotation_text="訊號均價")
 
         fig.update_layout(
             title=f"股價走勢圖 (已還原分割權值)", 
