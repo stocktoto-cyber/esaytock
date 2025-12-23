@@ -265,3 +265,5 @@ if st.session_state.run_analysis:
         st.error(f"找不到代碼 {ticker} 的資料，或今日資料尚未更新。")
 else:
     st.info("👈 請在左側設定參數，並按下「🚀 開始執行分析」按鈕。")
+
+以這個程式來做使用說明書，布林通道跟爆量的說明要清楚一點
