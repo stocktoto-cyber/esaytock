@@ -5,36 +5,9 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta, date
 import ta
 
-# --- 1. 頁面設定 (必須在第一行) ---
-st.set_page_config(
-    page_title="台股量價回測系統", 
-    layout="wide",  # 關鍵：設定為寬版模式
-    initial_sidebar_state="auto"
-)
-
-# --- 2. CSS 優化 (手機版面適配關鍵) ---
-# 這段 CSS 會移除原本 Streamlit 預設過大的留白，讓手機瀏覽更舒適
-st.markdown("""
-    <style>
-        /* 縮減主區塊的上下左右留白 */
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
-        }
-        /* 調整側邊欄寬度在手機上的顯示 */
-        [data-testid="stSidebar"] {
-            width: 300px; 
-        }
-        /* 優化 Metric 指標顯示，避免在手機被擠壓 */
-        [data-testid="stMetricValue"] {
-            font-size: 1.2rem !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-st.title("📈 台股量價與布林通道回測")
+# --- 頁面設定 ---
+st.set_page_config(page_title="台股量價回測系統", layout="wide")
+st.title("📈 台股量價與布林通道回測工具")
 
 # --- 初始化 Session State ---
 if 'run_analysis' not in st.session_state:
@@ -49,7 +22,7 @@ if stock_id and not stock_id.endswith('.TW') and not stock_id.endswith('.TWO'):
 else:
     ticker = stock_id
 
-# 強制更新按鈕
+# 【新增功能】強制更新按鈕
 if st.sidebar.button("🔄 強制更新今日資料"):
     st.cache_data.clear()
     st.session_state.run_analysis = True
@@ -60,10 +33,11 @@ period_option = st.sidebar.selectbox(
 )
 
 today = datetime.now().date()
+# 【關鍵修正】為了抓到「今天」的收盤價，yfinance 的 end 必須是「明天」
 tomorrow = today + timedelta(days=1) 
 
 start_date = today - timedelta(days=365)
-end_date = tomorrow 
+end_date = tomorrow # 預設結束日期改成明天
 
 if period_option == "近一年":
     start_date = today - timedelta(days=365)
@@ -91,7 +65,7 @@ elif period_option == "自訂日期":
             end_date = user_end_date
 
 st.sidebar.header("2. 策略參數設定")
-vol_multiplier = st.sidebar.slider("成交量爆發倍數", 1.0, 3.0, 1.5, 0.1)
+vol_multiplier = st.sidebar.slider("成交量爆發倍數 (vs 20日均量)", 1.0, 3.0, 1.5, 0.1)
 
 st.sidebar.subheader("布林通道位置篩選")
 bb_strategy = st.sidebar.radio(
@@ -105,7 +79,7 @@ bb_tolerance = st.sidebar.slider(
     max_value=10.0, 
     value=1.0, 
     step=0.1, 
-    help="數值越大越寬鬆。"
+    help="數值越大越寬鬆。例如設定 5%，代表股價只要接近上緣 5% 範圍內就會視為觸發。"
 )
 
 bb_window = 20
@@ -115,7 +89,7 @@ st.sidebar.markdown("---")
 def start_click():
     st.session_state.run_analysis = True
 
-run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, type="primary", use_container_width=True) # 按鈕滿版
+run_btn = st.sidebar.button("🚀 開始執行分析", on_click=start_click, type="primary")
 
 # --- 數據處理函數 ---
 @st.cache_data(ttl=60)
@@ -136,7 +110,7 @@ if st.session_state.run_analysis:
     if start_date >= end_date:
          pass 
 
-    with st.spinner(f"正在分析 {ticker}..."):
+    with st.spinner(f"正在分析 {ticker} (已啟用即時更新)..."):
         data = load_data(ticker, start_date, end_date)
 
     if data is not None and not data.empty:
@@ -161,7 +135,6 @@ if st.session_state.run_analysis:
         diff = latest['Close'] - prev['Close']
         diff_pct = (diff / prev['Close']) * 100
         
-        # 使用 columns 排版，Streamlit 在手機上會自動將其堆疊
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("目前股價", f"{latest['Close']:.2f}", f"{diff:.2f} ({diff_pct:.2f}%)")
         m2.metric("最新成交量 (張)", f"{latest['Volume']:,.0f}")
@@ -184,7 +157,7 @@ if st.session_state.run_analysis:
             trigger_price = data["BB_High"] * (1 - tolerance_factor)
             condition_strategy = condition_vol & (data["Close"] >= trigger_price)
             signal_color = "red"
-            signal_name = f"爆量近上緣"
+            signal_name = f"爆量近上緣 (寬容度{bb_tolerance}%)"
             marker_symbol = "triangle-down"
             signal_y_position = data['High'] * 1.005 
 
@@ -192,7 +165,7 @@ if st.session_state.run_analysis:
             trigger_price = data["BB_Low"] * (1 + tolerance_factor)
             condition_strategy = condition_vol & (data["Close"] <= trigger_price)
             signal_color = "green"
-            signal_name = f"爆量近下緣"
+            signal_name = f"爆量近下緣 (寬容度{bb_tolerance}%)"
             marker_symbol = "triangle-up"
             signal_y_position = data['Low'] * 0.995 
 
@@ -205,9 +178,10 @@ if st.session_state.run_analysis:
 
         signals = data[condition_strategy]
         
-        # --- 顯示回測結果 ---
-        st.subheader(f"📊 歷史回測結果")
+        # --- 顯示回測結果 (新增平均價格功能) ---
+        st.subheader(f"📊 歷史回測結果 | 策略: {bb_strategy}")
         
+        # 修改這裡：原本是 columns(3)，改為 columns(4)
         col1, col2, col3, col4 = st.columns(4)
         
         if len(data) > 0:
@@ -216,11 +190,12 @@ if st.session_state.run_analysis:
             col2.metric("符合策略天數", f"{len(signals)} 天")
             col3.metric("最新布林寬度", f"{data['BB_Width'].iloc[-1]:.2f}")
             
+            # 【新增】計算訊號點的平均收盤價
             if not signals.empty:
                 avg_signal_price = signals['Close'].mean()
-                col4.metric("訊號均價", f"{avg_signal_price:.2f}")
+                col4.metric("訊號平均價格", f"{avg_signal_price:.2f}")
             else:
-                col4.metric("訊號均價", "無訊號")
+                col4.metric("訊號平均價格", "無訊號")
 
         # --- 繪圖 ---
         fig = go.Figure()
@@ -238,12 +213,12 @@ if st.session_state.run_analysis:
             x=data.index, 
             y=data['BB_Mid'], 
             line=dict(color='blue', width=1.5), 
-            name='月線'
+            name='月線 (20MA)'
         ))
 
         # 布林通道
-        fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='上緣'))
-        fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='下緣', fill='tonexty'))
+        fig.add_trace(go.Scatter(x=data.index, y=data['BB_High'], line=dict(color='gray', width=1, dash='dot'), name='布林上緣'))
+        fig.add_trace(go.Scatter(x=data.index, y=data['BB_Low'], line=dict(color='gray', width=1, dash='dot'), name='布林下緣', fill='tonexty'))
 
         # 標記訊號
         if not signals.empty:
@@ -252,24 +227,19 @@ if st.session_state.run_analysis:
                 x=signals.index, 
                 y=plot_y,
                 mode='markers',
-                marker=dict(symbol=marker_symbol, size=10, color=signal_color), # 手機上 size 改小一點點避免太擠
+                marker=dict(symbol=marker_symbol, size=12, color=signal_color),
                 name=signal_name
             ))
+            
+            # (選用) 如果你想在圖表上畫出一條平均價格的虛線，可以把下面這段註解打開
+            # fig.add_hline(y=avg_signal_price, line_dash="dash", line_color="purple", annotation_text="訊號均價")
 
-        # 圖表 RWD 設定
         fig.update_layout(
-            title=dict(text=f"{ticker} 股價走勢", font=dict(size=20)),
+            title=f"股價走勢圖 (已還原分割權值)", 
             xaxis_rangeslider_visible=False, 
-            height=500, # 稍微調低高度，讓手機版容易滑動
-            margin=dict(l=10, r=10, t=40, b=10), # 縮減圖表內部邊距
-            legend=dict(
-                orientation="h", # 圖例改為水平顯示
-                yanchor="bottom", y=1.02, xanchor="right", x=1
-            )
+            height=600
         )
-        
-        # scrollZoom=False 對手機很重要，防止滑動頁面時卡在圖表縮放上
-        st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
+        st.plotly_chart(fig, use_container_width=True)
 
         # --- 詳細數據 ---
         st.subheader("🔎 策略訊號詳細數據")
@@ -277,24 +247,20 @@ if st.session_state.run_analysis:
             display_df = signals[['Close', 'Volume', 'Vol_MA20', 'BB_High', 'BB_Low', 'BB_Width']].copy()
             display_df['Volume_Ratio'] = display_df['Volume'] / display_df['Vol_MA20']
 
-            display_df.columns = ['收盤價', '成交量', '月均量', '上緣', '下緣', '頻寬', '量增']
+            display_df.columns = ['收盤價', '成交量 (張)', '月均量', '布林上緣', '布林下緣', '通道寬度', '量增倍數']
             display_df.index.name = '日期'
 
-            # 簡化日期格式顯示 (只取日期部分)
-            display_df.index = display_df.index.strftime('%Y-%m-%d')
-
             formatted_df = display_df.style.format({
-                '收盤價': '{:.1f}',
-                '成交量': '{:,.0f}',
+                '收盤價': '{:.2f}',
+                '成交量 (張)': '{:,.0f}',
                 '月均量': '{:,.0f}',
-                '上緣': '{:.1f}',
-                '下緣': '{:.1f}',
-                '頻寬': '{:.1f}',
-                '量增': '{:.1f}x'
+                '布林上緣': '{:.2f}',
+                '布林下緣': '{:.2f}',
+                '通道寬度': '{:.2f}',
+                '量增倍數': '{:.2f}倍'
             })
             
-            # 表格 RWD 關鍵
-            st.dataframe(formatted_df, use_container_width=True)
+            st.dataframe(formatted_df)
         else:
             st.warning("在此區間內，沒有發現符合「策略條件」的交易日。")
     else:
